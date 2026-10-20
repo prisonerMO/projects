@@ -1,0 +1,161 @@
+﻿@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@using SQLChecker.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@using Microsoft.AspNetCore.Components.Web
+@using SQLChecker.Services
+@inject IDatabaseService DatabaseService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>SQLChecker - Databases</PageTitle>
+<div class="panel-header-container">
+    <div class="panel-headers">
+        <h3>Tietokantojen hallinta</h3>
+    </div>
+</div>
+<div class="panel-create-container">
+    <button class="btn-create" @onclick="OpenCreateModal">+ Luo uusi tietokanta</button>
+</div>
+
+@if (ViewModel.Databases == null || !ViewModel.Databases.Any())
+{
+    <p class="nav-text-normal no-content">Ladataan tietokantoja...</p>
+}
+else
+{
+    <div class="admin-table-container">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Tehtävän nimi</th>
+                    <th>Luotu</th>
+                    <th>Toiminnot</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var database in ViewModel.Databases)
+                {
+                    <tr>
+                        <td class="admin-name-cell" @onclick="@(() => ShowDatabaseData(database))">
+                            @database.Name
+                        </td>
+                        <td class="admin-description-cell">@database.CreatedAt</td>
+                        <td class="admin-actions-cell">
+                            <button class="btn-action btn-view" @onclick="@(() => ShowDatabaseData(database))">
+                                Näytä
+                            </button>
+                            <button class="btn-action btn-edit" @onclick="@(() => OpenEditModal(database))">
+                                Muokkaa
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal for creating database-->
+<div class="modal fade @(IsCreateModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Luo uusi tietokanta</h5>
+                <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="NewBase" OnValidSubmit="CreateDatabase">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(CreateDatabaseError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @CreateDatabaseError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="new-database-name">Tietokannan nimi</label>
+                        <InputText id="new-database-name" class="form-control" @bind-Value="NewBase.Name" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseCreateModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Lisää</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+@code {
+    [Parameter]
+    public AdminViewModel ViewModel { get; set; }
+
+    private Database NewBase { get; set; } = new Database();
+    private string? CreateDatabaseError { get; set; } = null;
+    private bool IsCreateModalOpen = false;
+    
+    private bool ShowDatabase { get; set; } = false;
+    private Database? SelectedDatabase { get; set; } = null;
+
+    private string? EditDatabaseError { get; set; } = null;
+    private bool IsEditModalOpen = false;
+    private Database EditingDatabase { get; set; } = new();
+
+    private void OpenCreateModal()
+    {
+        IsCreateModalOpen = true;
+        NewBase = new Database();
+    }
+    private void CloseCreateModal()
+    {
+        IsCreateModalOpen = false;
+        CreateDatabaseError = null;
+        NewBase = new Database();
+    }
+
+    
+    private async Task CreateDatabase()
+    {
+        CreateDatabaseError = null;
+
+        if (string.IsNullOrWhiteSpace(NewBase.Name))
+        {
+            CreateDatabaseError = "Tietokannan nimi on pakollinen.";
+            return;
+        }
+
+        try
+        {
+            var createdDatabase = await DatabaseService.CreateDatabaseAsync(NewBase);
+            ViewModel.Databases = await DatabaseService.GetAllDatabasesAsync();
+
+            NewBase = new Database();
+            CloseCreateModal();
+        }
+        catch (Exception ex)
+        {
+            CreateDatabaseError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private void ShowDatabaseData(Database database)
+    {
+        Console.WriteLine($"Showing database data for: {database.Name}");
+        SelectedDatabase = database;
+        ShowDatabase = true;
+    }
+
+    
+    private void OpenEditModal(Database database)
+    {
+        EditingDatabase = new Database
+        {
+            Name = database.Name,
+        };
+        IsEditModalOpen = true;
+    }
+}

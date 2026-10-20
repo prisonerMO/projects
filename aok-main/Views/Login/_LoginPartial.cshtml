@@ -1,0 +1,40 @@
+﻿@model AOK.ViewModels.UserRegisterViewModel
+@{
+	ViewData["Title"] = "AOK - Kirjaudu";
+}
+
+
+<div class="container mt-3 mb-3 text-centert">
+	<div id="lr-button-container" class="d-flex mx-auto">
+		<button data-target="Login" class="login-tab activated rounded-top">Kirjaudu</button>
+		<button data-target="Register" class="login-tab unactivated rounded-top">Rekisteröidy</button>
+	</div>
+
+	<div class="row justify-content-center lr-tab rounded-bottom">
+		<div class="col">
+            <form asp-controller="Login" asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
+                <div class="mb-2 text-start mt-3">
+                    <label asp-for="Username" class="form-label font-weight-bold" style="font-size: 1rem;">Käyttäjänimi:</label>
+                    <input asp-for="Username" class="form-control" />
+                    <span asp-validation-for="Username" class="text-danger"></span>
+                </div>
+                <div class="mb-3 text-start mt-3">
+                    <label asp-for="Password" class="form-label font-weight-bold" style="font-size: 1rem;">Salasana:</label>
+                    <input asp-for="Password" class="form-control" type="password" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+                <div class="text-center text-danger mb-2">
+                    <span>@ViewData["Error"]</span>
+                </div>
+                <div class="d-flex mx-auto justify-content-lg-evenly mt-10 mb-10">
+                    <button type="reset" class="event-btn-cancel">Tyhjennä</button>
+                    <button type="submit" class="event-btn-create">Kirjaudu</button>
+                </div>
+            </form>
+			<p class="text-center mt-1">
+				Ei vielä tiliä? Valitse rekisteröidy
+			</p>
+		</div>
+	</div>
+</div>

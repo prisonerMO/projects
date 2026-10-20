@@ -1,0 +1,284 @@
+﻿@using SQLChecker.Services
+@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@inject ICourseService CourseService
+@inject IAssignmentService AssignmentService
+@inject ITaskService TaskService
+@inject IDatabaseService DatabaseService
+@inject TaskCheckingService TaskChecker
+
+
+<div class="wb-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="wb-sidebar">
+        <div class="wb-sidebar-header">@(Course?.CourseName?.ToUpper() ?? "")</div>
+        <div class="wb-sidebar-scroll">
+            @if (Assignments != null)
+            {
+                @foreach (var assignment in Assignments)
+                {
+                    var isOpen = OpenWeeks.Contains(assignment.IdStr);
+                    <div class="wb-week-group">
+                        <div class="wb-week-label @(isOpen ? "open" : "")"
+                             @onclick="() => ToggleWeek(assignment.IdStr)">
+                            @assignment.Name
+                            <span class="wb-chevron">@(isOpen ? "▾" : "▸")</span>
+                        </div>
+
+                        @if (isOpen && assignment.Tasks != null)
+                        {
+                            <div class="wb-task-list open">
+                                @foreach (var task in assignment.Tasks)
+                                {
+                                    var isActive = task.IdStr == SelectedTask?.IdStr;
+                                    <div class="wb-task-item @(isActive ? "active" : "")"
+                                         @onclick="() => SelectTask(task)">
+                                        <span class="wb-task-dot @(isActive ? "active" : completedTasks.Contains(task.IdStr) ? "done" : "")"></span>
+                                        @task.Name
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="wb-main">
+        @if (SelectedTask != null)
+        {
+            <div class="wb-task-header">
+                <div class="wb-task-header-top">
+                    <span class="wb-task-title">@SelectedTask.Name</span>
+                    <span class="wb-task-badge">@currentAssignmentName</span>
+                </div>
+                <div class="wb-task-desc">@SelectedTask.Description</div>
+            </div>
+
+            <div class="wb-editor-area">
+                <div class="wb-editor-toolbar">
+                    <span class="wb-label">SQL EDITOR</span>
+                    <div class="wb-editor-actions">
+                        <button class="btn-wb-clear" @onclick="ClearEditor">Tyhjennä</button>
+                        <button class="btn-wb-run" @onclick="RunQuery" disabled="@isRunning">
+                            @(isRunning ? "Ajetaan..." : "▶ Aja kysely")
+                        </button>
+                    </div>
+                </div>
+                <textarea class="wb-editor-body"
+                          @bind="StudentSql"
+                          @bind:event="oninput"
+                          placeholder="Kirjoita SQL-kysely tähän..."></textarea>
+            </div>
+
+            <div class="wb-results-area">
+                <div class="wb-results-bar">
+                    <span class="wb-label">TULOKSET</span>
+                    <span class="wb-results-meta">@resultsMeta</span>
+                </div>
+                <div class="wb-results-body">
+
+                    @if (errorMessage != null)
+                    {
+                        <div class="wb-results-error">Virhe: @errorMessage</div>
+                    }
+                    else if (resultRows != null)
+                    {
+                        @if (resultRows.Count > 0)
+                        {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        @foreach (var col in resultCols!)
+                                        {
+                                            <th>@col</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in resultRows)
+                                    {
+                                        <tr>
+                                            @foreach (var cell in row)
+                                            {
+                                                <td>@cell</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        @* @if (verdict != null)
+                        {
+                            <div class="wb-verdict @(verdict.Passed ? "correct" : "wrong")">
+                                <span>@(verdict.Passed ? "✓" : "✗")</span>
+                                <span>@(verdict.Passed ? "Oikein! Tehtävä suoritettu." : $"Vastaus ei täsmää. {verdict.Error}")</span>
+                            </div>
+                        } *@
+                    }
+                    else
+                    {
+                        <div class="wb-results-empty">Aja kysely nähdäksesi tulokset</div>
+                    }
+
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="wb-results-empty" style="margin-top:40px">
+                Valitse tehtävä vasemmalta
+            </div>
+        }
+    </main>
+
+    <!-- RIGHT PANEL -->
+    <aside class="wb-right-panel">
+        <div class="wb-rp-section">
+            <div class="wb-rp-title">TIETOKANTATAULUT</div>
+            @if (dbSchema != null)
+            {
+                @foreach (var table in dbSchema)
+                {
+                    <div class="wb-db-table">
+                        <div class="wb-db-table-name" @onclick="() => ToggleSchema(table.Key)">
+                            @table.Key
+                            <span>@(openSchemas.Contains(table.Key) ? "▾" : "▸")</span>
+                        </div>
+                        @if (openSchemas.Contains(table.Key))
+                        {
+                            <div class="wb-db-cols">@string.Join(" · ", table.Value)</div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(SelectedTask?.Hint))
+        {
+            <div class="wb-hint-section">
+                <div class="wb-rp-title">VIHJE</div>
+                <div class="wb-hint-box">@SelectedTask.Hint</div>
+            </div>
+        }
+    </aside>
+
+</div>
+
+@code {
+    [Parameter] public string CourseId { get; set; } = "";
+
+    private Course? Course;
+    private List<Assignment>? Assignments;
+    private TaskDefinition? SelectedTask;
+
+    private string StudentSql = "";
+    private string? errorMessage;
+    private string? resultsMeta;
+    private List<string>? resultCols;
+    private List<List<string>>? resultRows;
+    private (bool Passed, string Error)? verdict;
+    private bool isRunning = false;
+
+    private HashSet<string> OpenWeeks = new();
+    private HashSet<string> completedTasks = new();
+    private HashSet<string> openSchemas = new();
+    private Dictionary<string, List<string>>? dbSchema;
+    private string currentAssignmentName = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Course = await CourseService.GetCourseByIdAsync(CourseId);
+
+        var allAssignments = await AssignmentService.GetAllAssignmentsAsync();
+        Console.WriteLine($"allAssignments: {allAssignments?.Count.ToString() ?? "NULL"}");
+        Assignments = allAssignments?
+            .Where(a => a.CourseIdStr == Course.IdStr)
+            .ToList() ?? new List<Assignment>();
+
+        Console.WriteLine($"Filtered assignments: {Assignments.Count}");
+        foreach (var a in Assignments)
+            Console.WriteLine($"  - {a.Name} | CourseIdStr: {a.CourseIdStr}");
+
+        var firstTask = Assignments
+            .FirstOrDefault()?.Tasks?
+            .FirstOrDefault();
+
+        if (firstTask != null)
+            await SelectTask(firstTask);
+
+        dbSchema = await DatabaseService.GetSchemaAsync("sakila");
+    }
+
+    private async Task SelectTask(TaskDefinition task)
+    {
+        SelectedTask = task;
+        StudentSql = "";
+        errorMessage = null;
+        resultRows = null;
+        resultsMeta = null;
+        verdict = null;
+
+        // Find assignment that contains this task
+        currentAssignmentName = Assignments?
+            .FirstOrDefault(a => a.Tasks?.Any(t => t.IdStr == task.IdStr) == true)
+            ?.Name ?? "";
+    }
+
+    private void ToggleWeek(string id)
+    {
+        if (!OpenWeeks.Remove(id))
+            OpenWeeks.Add(id);
+    }
+
+    private void ToggleSchema(string name)
+    {
+        if (!openSchemas.Remove(name))
+            openSchemas.Add(name);
+    }
+
+    private void ClearEditor() => StudentSql = "";
+
+    private async Task RunQuery()
+    {
+        if (SelectedTask == null || string.IsNullOrWhiteSpace(StudentSql)) return;
+
+        isRunning = true;
+        errorMessage = null;
+        resultRows = null;
+        resultsMeta = null;
+        verdict = null;
+
+        await Task.Yield(); // let UI update to show "Ajetaan..."
+
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var raw = await DatabaseService.ExecuteAsync(StudentSql);
+            sw.Stop();
+
+            // raw[0] = header row, rest = data
+            resultCols = raw.FirstOrDefault() ?? new();
+            resultRows = raw.Skip(1).ToList();
+            resultsMeta = $"{resultRows.Count} riviä · {sw.ElapsedMilliseconds}ms";
+
+            //verdict = TaskChecker.RunTask(SelectedTask, StudentSql);
+
+            if (!verdict.HasValue || !verdict.Value.Passed)
+                completedTasks.Add(SelectedTask.IdStr);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            resultsMeta = null;
+        }
+        finally
+        {
+            isRunning = false;
+        }
+    }
+}

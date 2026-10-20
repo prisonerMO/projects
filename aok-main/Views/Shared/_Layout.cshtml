@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<component type="typeof(Microsoft.AspNetCore.Components.Web.HeadOutlet)" render-mode="Server" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>@ViewData["Title"]</title>
+	<script type="importmap"></script>
+	<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+	<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+	<link rel="stylesheet" href="~/AOK.styles.css" asp-append-version="true" />
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
+</head>
+<body>
+	<header class="layout-main-header">
+		<nav class="navbar navbar-expand-sm navbar-light bg-white">
+			<div class="container-fluid position-relative layout-main-nav-content">
+				<button class="navbar-toggler" type="button" data-bs-toggle="collapse"  data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+					<span class="navbar-toggler-icon"></span>
+				</button>
+
+				<div class="collapse navbar-collapse justify-content-center aok-nav-bold" id="mainNavbar">
+					<ul class="navbar-nav gap-5">
+						<li class="nav-item" is-active-route active-class="main-nav-active" asp-controller="Events" asp-action="Index">
+							<a class="nav-link" asp-controller="Events" asp-action="Index">TAPAHTUMAT</a>
+						</li>
+						@* <li class="nav-item"> *@
+						@*     <a class="nav-link" asp-controller="Calender" asp-action="Index"><i class="bi bi-calendar"></i> Pelikalenteri</a> *@
+						@* </li> *@
+						
+						@if (User.Identity.IsAuthenticated)
+						{
+
+							@if (User.IsInRole("Admin") || User.IsInRole("PowerUser"))
+							{
+								<li class="nav-item" is-active-route active-class="main-nav-active" asp-controller="EventManager" asp-action="All">
+								<a class="nav-link" asp-controller="EventManager" asp-action="All">
+										<i class="bi bi-shield-lock"></i> HALLINTA
+									</a>
+								</li>
+							}
+							@if (User.IsInRole("Admin"))
+							{
+								<li class="nav-item" is-active-route active-class="main-nav-active" asp-controller="Admin" asp-action="Users">
+									<a class="nav-link" asp-controller="Admin" asp-action="Users">
+										<i class="bi bi-shield-lock"></i> ADMIN
+									</a>
+								</li>
+							}
+						}
+					</ul>
+				</div>
+			</div>
+		</nav>
+		<!-- User dropdown (always on right) -->
+		<div class="dropdown layout-main-dropdown aok-nav-text-normal">
+			@if (User.Identity.IsAuthenticated)
+			{
+
+				<button class="btn btn-light dropdown-toggle d-flex align-items-center layout-main-dropdown-btn" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+					<i class="bi bi-person-circle fs-4 me-2"></i>
+					<span>@User.Identity.Name</span>
+				</button>
+				<ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+					<li><a class="dropdown-item" asp-controller="Account" asp-action="Settings"><i class="bi bi-gear"></i> Asetukset</a></li>
+					<li><hr class="dropdown-divider" /></li>
+					<li>
+						<form method="post" asp-controller="Login" asp-action="Logout" class="dropdown-item p-0 m-0 border-0 bg-transparent">
+							<button type="submit" class="btn btn-link dropdown-item ">
+								<i class="bi bi-box-arrow-right"></i> Kirjaudu ulos
+							</button>
+						</form>
+					</li>
+				</ul>
+			}
+			else
+			{
+				<button class="dropdown-toggle d-flex align-items-center layout-main-dropdown-btn" type="button" id="guestDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+					<i class="bi bi-person-circle fs-4 me-2"></i>
+					<span>Guest</span>
+				</button>
+				<ul class="dropdown-menu dropdown-menu-end" aria-labelledby="guestDropdown">
+					<li><a class="dropdown-item" asp-controller="Login" asp-action="Login"><i class="bi bi-box-arrow-in-right"></i> Kirjaudu sisään</a></li>
+					<li><a class="dropdown-item" asp-controller="Login" asp-action="Register"><i class="bi bi-person-plus"></i> Rekisteröidy</a></li>
+				</ul>
+
+			}
+		</div>
+	</header>
+	<div class="container">
+		<main role="main" class="pb-3">
+			@RenderBody()
+		</main>
+	</div>
+
+	<footer class="border-top footer text-muted">
+		<div class="container">
+			&copy; 2025 - AOK
+		</div>
+	</footer>
+	<base href="~/" />
+	<script src="_framework/blazor.server.js"></script>
+	<script src="~/lib/jquery/dist/jquery.min.js"></script>
+	<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+	<script src="~/js/site.js" asp-append-version="true"></script>
+	@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

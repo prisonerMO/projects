@@ -1,0 +1,507 @@
+﻿@using AOK.Models.Services
+@using AOK.Models
+@using AOK.ViewModels
+@using MongoDB.Bson;
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Roolit</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Roolien hallinta</h3>
+	</div>
+</div>
+
+<!-- Roles Section -->
+@if (ViewModel.Roles == null)
+{
+	<p class="aok-nav-text-normal aok-no-content">Ladataan rooleja...</p>
+}
+else if (GroupedRoles.Any())
+{
+	<div class="event-role-container">
+		@foreach (var roleGroup in GroupedRoles)
+		{
+			<div class="event-role-content">
+				<table class="event-role-panel">
+					<thead>
+						<tr>
+							<th>Rooli</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var role in roleGroup)
+						{
+							<tr>
+								<td style="cursor: pointer;" @onclick="() => ShowRoleData(role)">@role.Name</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+else
+{
+	<p class="aok-nav-text-normal aok-no-content">Rooleja ei löytynyt.</p>
+}
+
+<div class="event-panel-create-cont-left">
+	<button class="event-btn-create" @onclick="OpenRoleModal">+ Luo rooli</button>
+</div>
+
+<!-- RoleBoxes Section -->
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Roolieboxien hallinta</h3>
+	</div>
+</div>
+@if (ViewModel.RoleBoxes == null)
+{
+	<p>Ladataan rooliboxeja...</p>
+}
+else if (ViewModel.RoleBoxes.Any())
+{
+
+	<div class="event-role-container">
+		@foreach (var boxGroup in GroupedRoleBoxes)
+		{
+			<div class="event-role-content">
+				<table class="event-role-panel">
+					<thead>
+						<tr>
+							<th>Nimi</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var box in boxGroup)
+						{
+							<tr>
+								<td style="cursor: pointer;" @onclick="() => ShowBoxData(box)">@box.Name</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+else
+{
+	<p class="aok-nav-text-normal aok-no-content">Rooliboxeja ei löytynyt.</p>
+}
+
+<div class="event-panel-create-cont-left">
+	<button class="event-btn-create" @onclick="OpenRoleBoxModal">+ Luo rooliboxi</button>
+</div>
+<!-- Create Role-->
+@if (IsRoleModalOpen)
+{
+	<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Luo uusi rooli</h5>
+					<button type="button" class="btn-close" @onclick="CloseCreateRoleModal"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="new-role-name">Nimi</label>
+						<input id="new-role-name" class="form-control" @bind="NewRole.Name" />
+					</div>
+
+				</div>
+				<div class="modal-footer">
+					<button class="event-btn-cancel" @onclick="CloseCreateRoleModal">Peruuta</button>
+					<button class="event-btn-create" @onclick="CreateRoleModal">Luo</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+<!-- Modify Role-->
+@if (ShowDataRole && SelectedRole != null)
+{
+	<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Muokkaa roolia: @SelectedRole.Name</h5>
+					<button type="button" class="event-btn-cancel" @onclick="CloseRoleModal" aria-label="Sulje"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="role-name-edit">Nimi</label>
+						<input id="role-name-edit" class="form-control" @bind="SelectedRole.Name" />
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="event-btn-cancel" @onclick="CloseRoleModal">Peruuta</button>
+					<button class="event-btn-delete" @onclick="RemoveRole">Poista</button>
+					<button class="event-btn-create" @onclick="SaveEditedRole">Tallenna muutokset</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+<!-- Create RoleBox Modal -->
+<div class="modal fade @(IsRoleBoxModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Luo uusi rooliboxi</h5>
+				<button type="button" class="btn-close" @onclick="CloseRoleBoxModal"></button>
+			</div>
+			<div class="modal-body">
+				<div class="mb-3">
+					<label for="er-name">Nimi</label>
+					<input id="er-name" class="form-control" @bind="NewRoleBox.Name" />
+				</div>
+				<div class="mb-3">
+					<label for="er-role">Valitse rooli</label>
+					<div class="input-group">
+						<select id="er-role" class="form-select" @bind="NewRoleToAdd">
+							<option disabled selected value="">-- Valitse rooli --</option>
+							@foreach (var role in ViewModel.Roles)
+							{
+								<option value="@role.IdStr">@role.Name</option>
+							}
+						</select>
+						<button class="event-btn-create" @onclick="AddRoleToRoleBox">+</button>
+					</div>
+				</div>
+				@if (NewRoleBox.Roles.Any())
+				{
+					<ul class="list-group">
+						@foreach (var eRole in NewRoleBox.Roles)
+						{
+							<li class="list-group-item d-flex justify-content-between align-items-center">
+								@eRole.Name
+								<button class="event-btn-delete" @onclick="() => RemoveRoleFromRoleBox(eRole)">Poista</button>
+							</li>
+						}
+					</ul>
+				}
+			</div>
+			<div class="modal-footer">
+				<button class="event-btn-cancel" @onclick="CloseRoleBoxModal">Peruuta</button>
+				<button class="event-btn-create" @onclick="CreateRoleBoxFromModal">Tallenna</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- RoleBox Info Modal -->
+@if (ShowDataBox && SelectedBox != null)
+{
+	<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Muokkaa rooliboxia: @SelectedBox.Name</h5>
+					<button type="button" class="btn-close" @onclick="CloseModal" aria-label="Sulje"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="er-dname">Nimi</label>
+						<input id="er-dname" class="form-control" @bind="SelectedBox.Name" />
+					</div>
+					<div class="mb-3">
+						<label for="er-drole">Lisää rooli</label>
+						<div class="input-group">
+							<select id="er-drole" class="form-select" @bind="SelectedRoleToAdd">
+								<option disabled selected value="">-- Valitse rooli --</option>
+								@foreach (var role in ViewModel.Roles)
+								{
+									<option value="@role.IdStr">@role.Name</option>
+								}
+							</select>
+							<button class="event-btn-create" @onclick="AddRoleToSelectedBox">+</button>
+						</div>
+					</div>
+					@if (SelectedBox.Roles?.Any() == true)
+					{
+						<ul class="list-group">
+							@foreach (var eRole in SelectedBox.Roles)
+							{
+								<li class="list-group-item d-flex justify-content-between align-items-center">
+									@eRole.Name
+									<button class="event-btn-delete" @onclick="() => RemoveRoleFromSelectedBox(eRole)">Poista</button>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+				<div class="modal-footer">
+					<button class="event-btn-cancel" @onclick="CloseModal">Peruuta</button>
+					<button class="event-btn-delete" @onclick="RemoveRoleBox">Poista</button>
+					<button class="event-btn-create" @onclick="SaveEditedRoleBox">Tallenna muutokset</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+@code {
+	[Parameter]
+	public EventManagerViewModel ViewModel { get; set; }
+
+	private Role NewRole { get; set; } = new();
+	private bool IsRoleBoxModalOpen = false;
+	private bool ShowDataRole = false;
+	private Role? SelectedRole = null;
+	private bool ShowDataBox = false;
+	private RoleBox NewRoleBox { get; set; } = new();
+	private string NewRoleToAdd { get; set; }
+	private string SelectedRoleToAdd { get; set; }
+	private RoleBox? SelectedBox = null;
+	private bool IsRoleModalOpen = false;
+
+	private const int ChunkSize = 10;
+	private List<List<Role>> GroupedRoles
+	{
+		get
+		{
+			if (ViewModel.Roles == null)
+				return new List<List<Role>>();
+
+			var sorted = ViewModel.Roles
+				.Where(r => !string.IsNullOrWhiteSpace(r.Name))
+				.OrderBy(r => r.Name)
+				.ToList();
+
+			return sorted
+				.Select((role, index) => new { role, index })
+				.GroupBy(x => x.index / ChunkSize)
+				.Select(g => g.Select(x => x.role).ToList())
+				.ToList();
+		}
+	}
+	private List<List<RoleBox>> GroupedRoleBoxes
+	{
+		get
+		{
+			if (ViewModel.RoleBoxes == null)
+				return new List<List<RoleBox>>();
+
+			var sorted = ViewModel.RoleBoxes
+				.Where(b => !string.IsNullOrWhiteSpace(b.Name))
+				.OrderBy(b => b.Name)
+				.ToList();
+
+			return sorted
+				.Select((box, index) => new { box, index })
+				.GroupBy(x => x.index / ChunkSize)
+				.Select(g => g.Select(x => x.box).ToList())
+				.ToList();
+		}
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		await ReloadData();
+	}
+
+	private void OpenRoleModal()
+	{
+		NewRole = new(); // reset form
+		IsRoleModalOpen = true;
+	}
+	private void CloseCreateRoleModal()
+	{
+		IsRoleModalOpen = false;
+		NewRole = new();
+	}
+	private async Task CreateRoleModal()
+	{
+		await CreateRole();
+		CloseCreateRoleModal();
+	}
+	private async Task CreateRole()
+	{
+		if (!string.IsNullOrWhiteSpace(NewRole.Name))
+		{
+			NewRole._id = ObjectId.GenerateNewId();
+			DB_Services.Save(NewRole);
+			await ReloadData();
+			NewRole = new();
+			StateHasChanged();
+		}
+	}
+
+	private void CreateRoleBoxFromModal()
+	{
+		if (!string.IsNullOrWhiteSpace(NewRoleBox.Name))
+		{
+			NewRoleBox._id = ObjectId.GenerateNewId();
+			DB_Services.Save(NewRoleBox);
+			ViewModel.RoleBoxes = DB_Services.GetAll<RoleBox>();
+			NewRoleBox = new();
+			SelectedRoleToAdd = "";
+			CloseRoleBoxModal();
+			StateHasChanged();
+		}
+	}
+
+	private void AddRoleToRoleBox()
+	{
+		if (ObjectId.TryParse(NewRoleToAdd, out var roleId))
+		{
+			var role = ViewModel.Roles.FirstOrDefault(r => r._id == roleId);
+			if (role != null)
+			{
+				role._id = ObjectId.GenerateNewId();
+				NewRoleBox.Roles.Add(role);
+				NewRoleToAdd = "";
+			}
+		}
+	}
+
+	private void RemoveRoleFromRoleBox(Role role)
+	{
+		if (NewRoleBox.Roles.Contains(role))
+		{
+			NewRoleBox.Roles.Remove(role);
+			DB_Services.Save(NewRoleBox);
+			StateHasChanged();
+		}
+	}
+
+	private void RemoveRoleBox()
+	{
+		if (SelectedBox == null)
+			return;
+
+		DB_Services.Delete<RoleBox>(SelectedBox._id);
+		ViewModel.RoleBoxes = DB_Services.GetAll<RoleBox>();
+		CloseModal();
+		StateHasChanged();
+	}
+
+	private void SaveEditedRoleBox()
+	{
+		if (SelectedBox != null)
+		{
+			DB_Services.Save(SelectedBox);
+			ViewModel.RoleBoxes = DB_Services.GetAll<RoleBox>();
+			CloseModal();
+		}
+	}
+
+	private void ShowRoleData(Role role)
+	{
+		SelectedRole = role;
+		ShowDataRole = true;
+	}
+	private void CloseRoleModal()
+	{
+		ShowDataRole = false;
+		SelectedRole = null;
+	}
+	private async Task SaveEditedRole()
+	{
+		if (SelectedRole != null)
+		{
+			DB_Services.Save(SelectedRole);
+			await ReloadData();
+			ShowDataRole = false;
+			StateHasChanged();
+		}
+	}
+	private async Task RemoveRole()
+	{
+		if (SelectedRole == null)
+			return;
+		foreach (var box in ViewModel.RoleBoxes)
+		{
+			var toRemove = box.Roles.FirstOrDefault(r => r._id == SelectedRole._id);
+			if (toRemove != null)
+			{
+				box.Roles.Remove(toRemove);
+				DB_Services.Save(box);
+			}
+		}
+		DB_Services.Delete<Role>(SelectedRole._id);
+		await ReloadData();
+		ShowDataRole = false;
+		SelectedRole = null;
+		StateHasChanged();
+	}
+	private async Task ReloadData()
+	{
+		ViewModel.Roles = await DB_Services.GetAllAsync<Role>();
+		ViewModel.RoleBoxes = await DB_Services.GetAllAsync<RoleBox>();
+	}
+
+
+	private void AddRoleToSelectedBox()
+	{
+		if (ObjectId.TryParse(SelectedRoleToAdd, out var roleId))
+		{
+			var role = ViewModel.Roles.FirstOrDefault(r => r._id == roleId);
+			if (role != null)
+			{
+				role._id = ObjectId.GenerateNewId();
+				SelectedBox.Roles.Add(role);
+				SelectedRoleToAdd = "";
+			}
+		}
+	}
+	private void RemoveRoleFromSelectedBox(Role eRole)
+	{
+		var roleToRemove = SelectedBox.Roles.FirstOrDefault(r => r._id == eRole._id);
+		if (roleToRemove != null)
+		{
+			SelectedBox.Roles.Remove(roleToRemove);
+			DB_Services.Save(SelectedBox);
+			StateHasChanged();
+		}
+	}
+
+
+	private void OpenRoleBoxModal()
+	{
+		NewRoleBox = new();
+		IsRoleBoxModalOpen = true;
+	}
+	private void ShowBoxData(RoleBox rolebox)
+	{
+		SelectedBox = rolebox;
+		ShowDataBox = true;
+	}
+	private void CloseRoleBoxModal() => IsRoleBoxModalOpen = false;
+	private void DeleteRoleBox(ObjectId boxId)
+	{
+		var box = ViewModel.RoleBoxes.FirstOrDefault(b => b._id == boxId);
+		if (box != null)
+		{
+			ViewModel.RoleBoxes.Remove(box);
+		}
+	}
+
+
+	private void CloseModal()
+	{
+		ShowDataBox = false;
+		SelectedBox = null;
+	}
+
+	private void AddRoleToBox(List<Role> targetList, string roleIdBinding, Action clearBinding)
+	{
+		if (ObjectId.TryParse(roleIdBinding, out var roleId))
+		{
+			var role = ViewModel.Roles.FirstOrDefault(r => r._id == roleId);
+			if (role != null && !targetList.Any(r => r._id == role._id))
+			{
+				role._id = ObjectId.GenerateNewId();
+				targetList.Add(role);
+				clearBinding();
+				StateHasChanged();
+			}
+		}
+	}
+}

@@ -1,0 +1,27 @@
+﻿@model AOK.ViewModels.AdminViewModel
+<div class="scroll-wrapper">
+<div class="admin-container">
+    <a asp-controller="Admin" asp-action="Users" class="btn @(Model.Type == 0 ? "admin-actived" : "admin-deactived")">
+        Käyttäjät
+    </a>
+    <a asp-controller="Admin" asp-action="Communities" class="btn @(Model.Type == 1 ? "admin-actived" : "admin-deactived")">
+        Yhteisöt
+    </a>
+    <a asp-controller="Admin" asp-action="Games" class="btn @(Model.Type == 2 ? "admin-actived" : "admin-deactived")">
+        Pelit
+    </a>
+</div>
+</div>
+@if (Model.Type == 0)
+{
+    <component type="typeof(AOK.Components.AdminUserPanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 1)
+{
+    <component type="typeof(AOK.Components.AdminCommunityPanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 2)
+{
+    <component type="typeof(AOK.Components.AdminGamePanel)" render-mode="Server" param-ViewModel="Model" />
+}
+

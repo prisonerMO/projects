@@ -1,0 +1,75 @@
+﻿@model AOK.ViewModels.EventManagerViewModel
+@{
+	ViewData["Title"] = "AOK - Tapahtumat";
+}
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Kaikki tapahtumat</h3>
+	</div>
+</div>
+
+@if (Model.AllEvents == null)
+{
+	<div class="event-show-no-content">
+		<p class="aok-nav-text-normal aok-no-content">Ladataan tapahtumia...</p>
+	</div>
+}
+else if (Model.AllEvents.Count == 0)
+{
+	<div class="event-show-no-content">
+		<p class="aok-nav-text-normal aok-no-content">Tapahtumia ei löytynyt.</p>
+	</div>
+}
+else
+{
+	<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+		@foreach (var ev in Model.AllEvents)
+		{
+			<div class="col">
+				<div class="card h-100 shadow rounded-4 border-0 overflow-hidden">
+					<div class="position-relative">
+						@if (!string.IsNullOrWhiteSpace(ev.TitleImageUrl))
+						{
+							<img src="@($"/File/FetchFile?subFolder=Events&target={ev.TitleImageUrl}")" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+						else if (!string.IsNullOrWhiteSpace(ev.Game.TitleImageUrl))
+						{
+							<img src="@($"/File/FetchFile?subFolder=Games&target={ev.Game.TitleImageUrl}")" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+						else
+						{
+							<img src="/images/placeholder.png" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+
+						<div class="position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-50 text-white p-2">
+							<div class="d-flex justify-content-between small">
+								<span>@ev.Community.Name</span>
+								<span>@ev.StartDate.ToString("dd.MM.yy")</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="card-body">
+						<h5 class="card-title fw-semibold">@ev.Title</h5>
+						<p class="card-text text-muted">
+							@((ev.Description?.Length > 80) ? ev.Description.Substring(0, 80) + "..." : ev.Description)
+						</p>
+					</div>
+					<div class="card-footer d-flex justify-content-between show-all-card">
+						@if (User.IsInRole("Admin") || User.IsInRole("PowerUser") && (ev.Community.IdStr == Model.CurrentUserCommunity || ev.CreatedBy == Model.CurrentUser))
+						{
+							<form asp-controller="EventManager" asp-action="Delete" asp-route-id="@ev._id" method="post" style="display:inline;">
+								<button type="submit" class="event-btn-delete text-center">Poista</button>
+							</form>
+							<form asp-controller="EventManager" asp-action="Modify" asp-route-id="@ev._id" method="post" style="display:inline;">
+								<button type="submit" class="event-btn-modify text-center">Muokkkaa</button>
+							</form>
+						}
+						<a class="event-btn-create  text-center" asp-controller="Events" asp-action="Show" asp-route-id="@ev.IdStr">Näytä</a>
+					</div>
+				</div>
+			</div>
+		}
+	</div>
+}

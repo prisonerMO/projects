@@ -1,0 +1,214 @@
+﻿@using AOK.Models
+@using AOK.Models.Services
+@using MongoDB.Bson
+@using AOK.ViewModels
+@inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - TS Palvelimet</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>TS palvelimien hallinta</h3>
+	</div>
+</div>
+@if (ViewModel.TSServers == null)
+{
+	<p class="aok-nav-text-normal aok-no-content">Ladataan TS palvelimia...</p>
+}
+else
+{
+	<div class="event-tss-container">
+
+		<div class="event-tss-content">
+			@if (ViewModel.TSServers.Count > 0)
+			{
+				<table class="event-tss-panel">
+					<thead>
+						<tr>
+							<th>Nimi</th>
+							<th>Osoite</th>
+							<th>Portti</th>
+							<th>Salasana</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var server in ViewModel.TSServers)
+						{
+							if (server.Name != "Tyhjä")
+							{
+								<tr style="cursor: pointer;" @onclick="() => OpenEditModal(server)">
+									<td>@server.Name</td>
+									<td>@server.IP</td>
+									<td>@server.Port</td>
+									<td>@server.Password</td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+
+			}
+			else
+			{
+			  <p class="aok-nav-text-normal aok-no-content">TS palvelimia ei löytynyt.</p>
+				
+			}
+			<div class="event-panel-create-cont@(ViewModel.TSServers.Count > 0 ? "" : "-left")">
+				<button class="event-btn-create" @onclick="OpenTSServerModal">+ Luo TS Server</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade @(IsTSServerModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Luo uusi TS Server</h5>
+					<button type="button" class="btn-close" @onclick="CloseTSServerModal"></button>
+				</div>
+				<div class="modal-body">
+					<EditForm Model="NewTSServer" OnValidSubmit="CreateTSServer">
+						<DataAnnotationsValidator />
+						<ValidationSummary />
+						<div>
+							<label for="tss-name">Nimi</label>
+							<InputText id="tss-name" class="form-control" @bind-Value="NewTSServer.Name" />
+						</div>
+
+						<div>
+							<label for="tss-ip">Osoite</label>
+							<InputText id="tss-ip" class="form-control" @bind-Value="NewTSServer.IP" />
+						</div>
+
+						<div>
+							<label for="tss-port">Portti</label>
+							<InputNumber id="tss-port" class="form-control" @bind-Value="NewTSServer.Port" />
+						</div>
+
+						<div>
+							<label for="tss-password">Salasana</label>
+							<InputText id="tss-password" class="form-control" @bind-Value="NewTSServer.Password" />
+						</div>
+
+						<div class="modal-footer">
+							<button type="button" class="event-btn-cancel" @onclick="CloseTSServerModal">Peruuta</button>
+							<button type="submit" class="event-btn-create">Luo</button>
+						</div>
+					</EditForm>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	@if (IsEditModalOpen && SelectedTSServer != null)
+	{
+		<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Muokkaa TS serveriä: @SelectedTSServer?.Name</h5>
+						<button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+					</div>
+					<div class="modal-body">
+						<div class="mb-3">
+							<label for="edit-name">Nimi</label>
+							<InputText id="edit-name" class="form-control" @bind-Value="SelectedTSServer.Name" />
+						</div>
+						<div class="mb-3">
+							<label for="edit-ip">Osoite</label>
+							<InputText id="edit-ip" class="form-control" @bind-Value="SelectedTSServer.IP" />
+						</div>
+						<div class="mb-3">
+							<label for="edit-port">Portti</label>
+							<InputNumber id="edit-port" class="form-control" @bind-Value="SelectedTSServer.Port" />
+						</div>
+						<div class="mb-3">
+							<label for="edit-password">Salasana</label>
+							<InputText id="edit-password" class="form-control" @bind-Value="SelectedTSServer.Password" />
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button class="event-btn-cancel" @onclick="CloseEditModal">Peruuta</button>
+						<button class="event-btn-delete" @onclick="DeleteTSServer">Poista</button>
+						<button class="event-btn-create" @onclick="SaveEditedTSServer">Tallenna muutokset</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+@code {
+	[Parameter]
+	public EventManagerViewModel ViewModel { get; set; }
+	private TSServer NewTSServer { get; set; } = new TSServer();
+	private bool IsTSServerModalOpen = false;
+	private bool IsEditModalOpen = false;
+	private TSServer? SelectedTSServer = null;
+
+	protected override async Task OnInitializedAsync()
+	{
+		ViewModel.TSServers = await DB_Services.GetAllAsync<TSServer>();
+	}
+
+	private async Task CreateTSServer()
+	{
+		if (!string.IsNullOrWhiteSpace(NewTSServer.Name))
+		{
+			NewTSServer._id = ObjectId.GenerateNewId();
+			DB_Services.Save(NewTSServer);
+			ViewModel.TSServers = await DB_Services.GetAllAsync<TSServer>();
+			NewTSServer = new TSServer();
+			StateHasChanged();
+			CloseTSServerModal();
+		}
+		else
+		{
+			Console.WriteLine("Missing TS Server Name");
+		}
+	}
+
+	private void OpenTSServerModal()
+	{
+		IsTSServerModalOpen = true;
+	}
+
+	private void CloseTSServerModal()
+	{
+		IsTSServerModalOpen = false;
+	}
+
+	private async Task SaveEditedTSServer()
+	{
+		if (!string.IsNullOrWhiteSpace(SelectedTSServer.Name))
+		{
+			DB_Services.Save(SelectedTSServer);
+			ViewModel.TSServers = await DB_Services.GetAllAsync<TSServer>();
+			StateHasChanged();
+			CloseEditModal();
+		}
+	}
+
+	private async Task DeleteTSServer()
+	{
+		if (SelectedTSServer != null)
+		{
+			DB_Services.Delete<TSServer>(SelectedTSServer._id);
+			ViewModel.TSServers = await DB_Services.GetAllAsync<TSServer>();
+			CloseEditModal();
+		}
+	}
+
+
+	private void OpenEditModal(TSServer server)
+	{
+		SelectedTSServer = server;
+		IsEditModalOpen = true;
+	}
+
+	private void CloseEditModal()
+	{
+		IsEditModalOpen = false;
+		SelectedTSServer = null;
+	}
+}

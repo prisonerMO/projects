@@ -1,0 +1,446 @@
+﻿@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@using SQLChecker.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@using Microsoft.AspNetCore.Components.Web
+@using SQLChecker.Services
+@inject IAssignmentService AssignmentService
+@inject ICourseService CourseService
+@inject ITaskService TaskService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>SQLChecker - Kurssit</PageTitle>
+
+<div class="panel-header-container">
+    <div class="panel-headers">
+        <h3>Tehtävä kokonaisuuksien hallinta</h3>
+    </div>
+</div>
+
+<div class="panel-create-container">
+    <button class="btn-create" @onclick="OpenCreateModal">+ Luo uusi tehtävä kokonaisuus</button>
+</div>
+
+@if (ViewModel.Assignments == null || !ViewModel.Assignments.Any())
+{
+    <p class="nav-text-normal no-content">Ladataan tehtävä kokonaisuuksia...</p>
+}
+else
+{
+    <div class="admin-table-container">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Kokonaisuuden nimi</th>
+                    <th>Kuvaus</th>
+                    <th>Tehtävät</th>
+                    <th>Kurssi</th>
+                    <th>Toiminnot</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var assignment in ViewModel.Assignments)
+                {
+                    <tr>
+                        <td class="admin-name-cell" @onclick="@(() => ShowAssignmentData(assignment))">
+                            @assignment.Name      
+                        </td>
+                        <td class="admin-description-cell">@assignment.Description</td>
+                        <td class="admin-tasks-cell">
+                            <span class="admin-badge">
+                                @(assignment.Tasks?.Count ?? 0) tehtävää
+                            </span>
+                        </td>
+                        <td class="admin-description-cell">@GetCourseName(assignment.CourseIdStr)</td>
+                        <td class="admin-actions-cell">
+                            <button class="btn-action btn-view" @onclick="@(() => ShowAssignmentData(assignment))">
+                                Näytä
+                            </button>
+
+                            <button class="btn-action btn-edit" @onclick="@(() => OpenEditModal(assignment))">
+                                Muokkaa
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal for viewing course details -->
+<div class="modal fade @(ShowAssignment ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tehtävä kokonaisuuden tiedot: @(SelectedAssignment?.Name ?? "")</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+            </div>
+            @if (SelectedAssignment != null)
+            {
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="course-name">Kokonaisuuden nimi</label>
+                        <input id="course-name" class="form-control" value="@SelectedAssignment?.Name" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="course-assignments">Tehtävät (@(SelectedAssignment?.Tasks?.Count ?? 0))</label>
+                        @if (SelectedAssignment?.Tasks != null && SelectedAssignment.Tasks.Any())
+                        {
+                            <div class="assignments-list">
+                                @foreach (var task in SelectedAssignment.Tasks)
+                                {
+                                    <div class="assignment-item">
+                                        @task.Name
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Ei tehtäviä</p>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="event-btn-cancel" @onclick="CloseModal">Sulje</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for creating new -->
+<div class="modal fade @(IsCreateModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Luo uusi kokonaisuus</h5>
+                <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="NewAssignment" OnValidSubmit="CreateAssignment">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(CreateAssignmentError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @CreateAssignmentError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="new-assignment-name">Kokonaisuuden nimi</label>
+                        <InputText id="new-assignment-name" class="form-control" @bind-Value="NewAssignment.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-assignment-description">Kokonaisuuden kuvaus</label>
+                        <InputTextArea id="new-assignment-description" class="form-control" @bind-Value="NewAssignment.Description" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Tehtävät</label>
+                        <div class="assignments-list">
+                            @foreach (var task in AvailableTasks)
+                            {
+                                <label class="admin-role-checkbox">
+                                    <input type="checkbox"
+                                           @onchange="(e) => ToggleTaskInNewAssignment(task, e)" />
+                                    <span class="admin-role-label">@task.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-assignment-course">Kurssi</label>
+                        <select id="new-assignment-course"
+                                class="form-control"
+                                @bind="SelectedCourseId">
+                            <option value="">-- Valitse kurssi --</option>
+                            @foreach (var course in AvailableCourses)
+                            {
+                                <option value="@course.IdStr">@course.CourseName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseCreateModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Lisää</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for editing assignment -->
+<div class="modal fade @(IsEditModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Muokkaa tehtäväpakettia</h5>
+                <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="EditingAssignment" OnValidSubmit="UpdateAssignment">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(EditAssignmentError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @EditAssignmentError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="edit-course-name">Tehtäväpaketin nimi</label>
+                        <InputText id="edit-course-name" class="form-control" @bind-Value="EditingAssignment.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-course-name">Tehtäväpaketin kuvaus</label>
+                        <InputTextArea id="edit-course-name" class="form-control" @bind-Value="EditingAssignment.Description" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Tehtävät</label>
+                        <div class="assignments-list">
+                            @foreach (var task in AvailableTasks)
+                            {
+                                <label class="admin-role-checkbox">
+                                    <input type="checkbox"
+                                           checked="@EditingAssignment.Tasks.Any(t => t._id == task._id)"
+                                           @onchange="(e) => ToggleTaskInAssignment(task, e)" />
+                                    <span class="admin-role-label">@task.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-assignment-course">Kurssi</label>
+                        <select id="edit-assignment-course"
+                                class="form-control"
+                                @bind="EditingCourseId">
+                            <option value="">-- Valitse kurssi --</option>
+                            @foreach (var course in AvailableCourses)
+                            {
+                                <option value="@course.IdStr">@course.CourseName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseEditModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Tallenna</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public AdminViewModel ViewModel { get; set; }
+
+    private bool ShowAssignment { get; set; } = false;
+    private Assignment? SelectedAssignment { get; set; } = null;
+
+    private string? CreateAssignmentError { get; set; } = null;
+    private bool IsCreateModalOpen = false;
+    private Assignment NewAssignment { get; set; } = new();
+
+    private string? EditAssignmentError { get; set; } = null;
+    private bool IsEditModalOpen = false;
+    private Assignment EditingAssignment { get; set; } = new();
+
+    private List<Course> AvailableCourses = new();
+    private string? SelectedCourseId = null;
+    private string? EditingCourseId = null;
+
+    private List<TaskDefinition> AvailableTasks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        AvailableCourses = await CourseService.GetAllCoursesAsync();
+        AvailableTasks = await TaskService.GetAllTasksAsync();
+    }
+    private string GetCourseName(string? courseId)
+    {
+        if (string.IsNullOrEmpty(courseId)) return "—";
+        return AvailableCourses.FirstOrDefault(c => c.IdStr == courseId)?.CourseName ?? "—";
+    }
+    private void ToggleTaskInAssignment(TaskDefinition task, ChangeEventArgs e)
+    {
+        var isChecked = (bool)e.Value!;
+        EditingAssignment.Tasks ??= new List<TaskDefinition>();
+
+        if (isChecked)
+        {
+            if (!EditingAssignment.Tasks.Any(t => t._id == task._id))
+                EditingAssignment.Tasks.Add(task);
+        }
+        else
+        {
+            EditingAssignment.Tasks.RemoveAll(t => t._id == task._id);
+        }
+    }
+    private void ToggleTaskInNewAssignment(TaskDefinition task, ChangeEventArgs e)
+    {
+        var isChecked = (bool)e.Value!;
+        NewAssignment.Tasks ??= new List<TaskDefinition>();
+
+        if (isChecked)
+            NewAssignment.Tasks.Add(task);
+        else
+            NewAssignment.Tasks.RemoveAll(t => t._id == task._id);
+    }
+
+    private void ShowAssignmentData(Assignment assignment)
+    {
+        Console.WriteLine($"Showing assignment data for: {assignment.Description}");
+        SelectedAssignment = assignment;
+        ShowAssignment = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowAssignment = false;
+        SelectedAssignment = null;
+    }
+
+    private void OpenCreateModal()
+    {
+        Console.WriteLine($"BUTTON PRESSED - IsCreateModalOpen: {IsCreateModalOpen}");
+        IsCreateModalOpen = true;
+        NewAssignment = new Assignment();
+        SelectedCourseId = null;
+    }
+
+    private void CloseCreateModal()
+    {
+        IsCreateModalOpen = false;
+        CreateAssignmentError = null;
+        NewAssignment = new Assignment();
+    }
+
+    private void OpenEditModal(Assignment assignment)
+    {
+        EditingAssignment = new Assignment
+        {
+            _id = assignment._id,
+            Name = assignment.Name,
+            Description = assignment.Description,
+            CourseIdStr = assignment.CourseIdStr,
+            Tasks = assignment.Tasks
+        };
+        EditingCourseId = assignment.CourseIdStr;
+        IsEditModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        IsEditModalOpen = false;
+        EditAssignmentError = null;
+        EditingAssignment = new Assignment();
+        EditingCourseId = null;
+    }
+
+    private async Task CreateAssignment()
+    {
+        CreateAssignmentError = null;
+
+        if (string.IsNullOrWhiteSpace(NewAssignment.Name))
+        {
+            CreateAssignmentError = "Kokonaisuuden nimi on pakollinen.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedCourseId))
+        {
+            CreateAssignmentError = "Valitse kurssi.";
+            return;
+        }
+
+        try
+        {
+            NewAssignment.CourseIdStr = SelectedCourseId;
+
+            var createdAssignment = await AssignmentService.CreateAssignmentAsync(NewAssignment);
+
+            var course = await CourseService.GetCourseObjectByIdStrAsync(SelectedCourseId);
+            if (course != null)
+            {
+                course.Assignments ??= new List<Assignment>();
+                course.Assignments.Add(createdAssignment);
+                await CourseService.UpdateCourseAsync(course);
+            }
+            ViewModel.Assignments = await AssignmentService.GetAllAssignmentsAsync();
+            CloseCreateModal();
+        }
+        catch (Exception ex)
+        {
+            CreateAssignmentError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task UpdateAssignment()
+    {
+        EditAssignmentError = null;
+
+        if (string.IsNullOrWhiteSpace(EditingAssignment.Name))
+        {
+            EditAssignmentError = "Kokonaisuuden nimi on pakollinen.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(EditingCourseId))
+        {
+            EditAssignmentError = "Valitse kurssi.";
+            return;
+        }
+
+        try
+        {
+            EditingAssignment.CourseIdStr = EditingCourseId;
+
+            await AssignmentService.UpdateAssignmentAsync(EditingAssignment);
+
+            var course = await CourseService.GetCourseObjectByIdStrAsync(EditingCourseId);
+            if (course != null)
+            {
+                if (SelectedAssignment?.CourseIdStr != null &&
+                    SelectedAssignment.CourseIdStr != EditingCourseId)
+                {
+                    var oldCourse = await CourseService.GetCourseObjectByIdStrAsync(SelectedAssignment.CourseIdStr);
+                    if (oldCourse != null)
+                    {
+                        oldCourse.Assignments?.RemoveAll(a => a.IdStr == EditingAssignment.IdStr);
+                        await CourseService.UpdateCourseAsync(oldCourse);
+                    }
+                }
+
+                course.Assignments ??= new List<Assignment>();
+                var existing = course.Assignments.FirstOrDefault(a => a.IdStr == EditingAssignment.IdStr);
+                if (existing != null)
+                {
+                    var index = course.Assignments.IndexOf(existing);
+                    course.Assignments[index] = EditingAssignment;
+                }
+                else
+                {
+                    course.Assignments.Add(EditingAssignment);
+                }
+
+                await CourseService.UpdateCourseAsync(course);
+            }
+
+            ViewModel.Assignments = await AssignmentService.GetAllAssignmentsAsync();
+            CloseEditModal();
+        }
+        catch (Exception ex)
+        {
+            EditAssignmentError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+}

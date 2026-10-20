@@ -1,0 +1,159 @@
+﻿@using AOK.Models
+@using AOK.Models.Services
+@using AOK.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Käyttäjät</PageTitle>
+
+<div class="event-panel-header-container ">
+    <div class="event-panel-headers">
+		<h3>Käyttäjäroolien hallinta</h3>
+	</div>
+</div>
+@if (ViewModel.Users == null || !ViewModel.Users.Any())
+{
+    <p class="aok-nav-text-normal aok-no-content">Ladataan käyttäjiä...</p>
+}
+else
+{
+    <!-- Table to display users and their roles -->
+    <table class="table-admin-user">
+        <thead>
+            <tr>
+                <th>
+                    <span class="dt-user">Käyttäjätunnus</span>
+                    <span class="mt-user">KT.</span>
+                </th>
+
+                <th>Roolit</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in ViewModel.Users)
+            {
+                <tr class="user-tr">
+                    <td style="cursor: pointer;" @onclick="@(() => ShowUserData(u))">@u.Username</td>
+                    <td>
+                        <div class="admin-roles-container">
+                            @foreach (var role in AllRoles)
+                            {
+                                <div class="form-check form-check-inline admin-roles">
+                                    <input type="checkbox"
+                                    class="form-check-input"
+                                    id="@($"{u.Username}_{role}")"
+                                    checked="@u.Roles.Contains(role)"
+                                    @onchange="(e => OnRoleChanged(u, role, e))" />
+                                    <label class="form-check-label" for="@($"{u.Username}_{role}")">@role</label>
+                                </div>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (ShowUser && SelectedUser != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Käyttäjän tiedot: @SelectedUser.Username</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="au-username">Käyttäjätunnus</label>
+                            <input id="au-username" class="form-control" value="@SelectedUser.Username" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-nickname">Pelinimi</label>
+                            <input id="au-nickname" class="form-control" value="@SelectedUser.Nickname" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-community">Yhteisö</label>
+                            <input id="au-community" class="form-control" value="@GetCommunityName(SelectedUser)" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-firstname">Etunimi</label>
+                            <input id="au-firstname" class="form-control" value="@SelectedUser.FirstName" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-lastname">Sukunimi</label>
+                            <input id="au-lastname" class="form-control" value="@SelectedUser.LastName" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-email">Sähköposti</label>
+                            <input id="au-email" class="form-control" value="@SelectedUser.Email" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-createdat">Luotu</label>
+                            <input id="au-createdat" class="form-control" value="@SelectedUser.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy :: HH:mm:ss")" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label for="au-lastlogin">Viimeisin kirjautuminen</label>
+                            <input id="au-lastlogin" class="form-control" value="@SelectedUser.LastLogin.ToLocalTime().ToString("dd.MM.yyyy :: HH:mm:ss")" readonly />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="event-btn-cancel" @onclick="CloseModal">Sulje</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    }
+
+
+}
+
+@code {
+    [Parameter] 
+    public AdminViewModel ViewModel { get; set; }
+
+    private List<string> AllRoles = new() { "Admin", "PowerUser", "Active" };
+    private bool ShowUser { get; set; } = false;
+    private User? SelectedUser { get; set; } = null;
+
+    private void OnRoleChanged(User user, string role, ChangeEventArgs e)
+    {
+        var isChecked = (bool)e.Value!;
+        var selectedUser = DB_Services.GetUserByUsername<User>(user.Username);
+
+
+        if (isChecked && !selectedUser.Roles.Contains(role))
+        {
+            selectedUser.Roles.Add(role);
+        }
+        else if (!isChecked)
+        {
+            selectedUser.Roles.Remove(role);
+        }
+        selectedUser.Save();
+
+    }
+
+
+    private void ShowUserData(User user)
+    {
+        var selectedUser = DB_Services.GetUserByUsername<User>(user.Username);
+        SelectedUser = selectedUser;
+        ShowUser = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowUser = false;
+        SelectedUser = null;
+    }
+
+    private string GetCommunityName(User user)
+    {
+        var username = DB_Services.GetUserByUsername<User>(user.Username);
+        var community = DB_Services.GetById<Community>(username.Community);
+        return community?.Name ?? "";
+    }
+}

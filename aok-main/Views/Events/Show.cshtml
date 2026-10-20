@@ -1,0 +1,340 @@
+﻿@model AOK.Models.Event
+
+@{
+	ViewData["Title"] = "AOK - " + Model.Title;
+	var currentUser = User.Identity.Name.ToLower();
+	var userAlreadySigned = Model.RoleBoxes
+		.SelectMany(box => box.Roles)
+		.Any(role => role.Player != null && role.Player.Username == currentUser);
+	var roleBoxes = Model.RoleBoxes.OrderBy(r => r.Order).ToList();
+	var datenow = DateTime.UtcNow;
+	var slotOpen = datenow > Model.SlottingOpenTime;
+	var lsSlotOpen = datenow > Model.LeaderSlottingOpenTime;
+}
+<div class="event-show-container">
+	<div class="event-show-first">
+		<div class="event-show-main-page">
+			<div class="event-show-title">
+				<h1>Joint-Ops - @Model.StartDate.ToLocalTime().ToString("dd.MM.yy")</h1>
+				<p class="p-0 mb-2">@Model.StartDate.ToLocalTime().ToString("HH:mm") - @Model.EndDate.ToLocalTime().ToString("HH:mm")</p>
+				<p class="p-0 m-0"><strong>@Model.Title </strong></p>
+				<p class="p-0 m-0">by @Model.Community.Name</p>
+			</div>
+			<div class="event-show-title-image">
+				<img src="@($"/File/FetchFile?subFolder=Events&target={Model.TitleImageUrl}")" alt="Event Title Image" />				
+			</div>
+		</div>
+	</div>
+
+	<div class="event-show-general-container">
+		<div class="event-show-header">
+			<h4>YLEISET</h4>
+		</div>		
+
+		<div class="event-show-general">
+			<div class="event-show-general-part">
+				<div class="event-show-mods aok-nav-text-normal">
+					<div class="event-mg-create-header">
+						<h2>MODIT</h2>
+					</div>
+					<div class="event-show-mods-a">
+						<a href="@($"File/FetchFile?subFolder=ModLists&target={Model.ModPreset}")" download>
+							@Model.ModPreset
+						</a>
+					</div>
+				</div>
+				<div class="event-show-server-container aok-nav-text-normal">
+
+					<div class="event-mg-create-header">
+						<h2>PALVELIMET</h2>
+					</div>
+
+					<div class="event-show-server-cont">
+						<div class="event-show-server">
+
+							<table>
+								<tr>
+									<th><p>Arma 3 palvelin:</p></th>
+								</tr>
+								<tr>
+									<td><i class="bi bi-pin-map-fill"></i>  Osoite: @Model.GameServer.IP</td>
+								</tr>
+								<tr>
+									<td><i class="bi bi-displayport"></i>  Portti: @Model.GameServer.Port</td>
+								</tr>
+								<tr>
+									<td><i class="bi bi-shield-lock"></i>  Salasana: @Model.GameServer.Password</td>
+								</tr>
+							</table>
+						</div>
+						<div class="event-show-server">
+
+							<table>
+								<tr>
+									<th><p>TS palvelin:</p></th>
+								</tr>
+								<tr>
+									<td><i class="bi bi-pin-map-fill"></i>  Osoite: @Model.TSServer.IP</td>
+								</tr>
+								<tr>
+									<td><i class="bi bi-displayport"></i>  Portti: @Model.TSServer.Port</td>
+								</tr>
+								<tr>
+									<td><i class="bi bi-shield-lock"></i>  Salasana: @Model.TSServer.Password</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+				</div>
+				<div class="event-show-schema aok-nav-text-normal">
+					<div class="event-mg-create-header">
+						<h2>AIKATAULUT</h2>
+					</div>
+					<div class="event-show-schema-cont">
+						<p>Joukkueenjohtaja tekee alustavan suunnitelman, <br />jota täydennetään tarvittaessa.</p>
+						<p>Tapahtuma päivä on: @Model.StartDate.ToLocalTime().ToString("dd.MM.yy")</p>
+
+						@{
+							var planStartLocal = Model.PlanStartTime.ToLocalTime();
+							var planEndLocal = planStartLocal.AddMinutes(Model.PlanDuration);
+
+							var startLocal = Model.StartDate.ToLocalTime();
+							var startPlus15Local = startLocal.AddMinutes(15);
+							var endLocal = Model.EndDate.ToLocalTime();
+						}
+
+						<p>@planStartLocal.ToString("HH:mm") - @planEndLocal.ToString("HH:mm") Johtajien käskynjako</p>
+						<p>@startLocal.ToString("HH:mm") - @startPlus15Local.ToString("HH:mm") Peliin saapuminen ja käskynjako</p>
+						<p>@startPlus15Local.ToString("HH:mm") - @endLocal.ToString("HH:mm") Tehtävän suoritus (arvio)</p>
+					</div>
+				</div>
+
+			</div>
+			<div class="event-show-general-part">
+				<div class="event-show-rules aok-nav-text-normal">
+					<div class="event-mg-create-header">
+						<h2>SÄÄNNÖT</h2>
+					</div>
+					<div class="event-show-rules-cont">
+						@if (Model.Rules != null && Model.Rules.Count > 0)
+						{
+							<ul>
+								@foreach (var rule in Model.Rules.OrderBy(r => r.Order))
+								{
+									<li class="event-show-rules-p">
+										<p class="fw-bold">@rule.Order. @rule.Title</p>
+										<p style="white-space: pre-wrap; margin-left: 1rem;">@rule.Description</p>
+									</li>
+								}
+							</ul>
+						}
+						else
+						{
+							<p>Ei sääntöjä.</p>
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!--Tehtävän tiedot-->
+	<div class="event-mission-container">
+		<div class="event-show-header">
+			<h4>TEHTÄVÄ</h4>
+		</div>
+		<div class="event-mission-part">
+			<div class="event-show-mission-partone">
+				<div class="event-mg-create-header">
+					<h2>I Yleiskuva</h2>
+				</div>
+				<div class="event-show-info">
+					<p><strong>Kartta:</strong> @Model.Map</p>
+				</div>
+				<div class="event-show-situation">
+					<p><strong>Tilanne:</strong></p>
+					<p>@Model.MissionDate.ToString("dd.MM.yyyy")</p>
+					<p>@Model.Situation</p>
+				</div>
+				<div class="event-show-friendlies">
+					<p><strong>Omat joukot:</strong></p>
+					<p>@Model.Friendlies</p>
+				</div>
+				<div class="event-show-enemies">
+					<p><strong>Víhollisjoukot:</strong></p>
+					<p>@Model.Enemies</p>
+				</div>
+				<div class="event-show-civilian">
+					<p><strong>Siviilit:</strong></p>
+					<p>@Model.Civilians</p>
+				</div>
+				<div class="event-show-roe">
+					<p><strong>Tulenavaussäännöt:</strong></p>
+					<p>@Model.ROE</p>
+				</div>
+				<div class="event-show-assests">
+					<p><strong>Varusteet:</strong></p>
+					<p>@Model.Assests</p>
+				</div>
+				<div class="event-show-mst">
+					<p><strong>Tehtävän aloitusaika:</strong></p>
+					<p>Klo. @Model.MissionDate.ToString("HH.mm")</p>
+				</div>
+				<div class="event-show-weather">
+					<p><strong>Säätiedotus:</strong></p>
+					<p>@Model.Weather</p>
+				</div>
+			</div>
+			<div class="event-show-mission-parttwo">
+				<!--Toinen part task-->
+				<div class="event-mg-create-header">
+					<h2>II Tehtävä</h2>
+				</div>
+				<div class="event-show-mission">
+					<p>@Model.Mission</p>
+				</div>
+
+				<!--kolmas part task-->
+				<div class="event-mg-create-header">
+					<h2>III Toteutus</h2>
+				</div>
+				<div class="event-show-process">
+					<p>@Model.Process</p>
+				</div>
+
+				<!--neljäs part task-->
+				<div class="event-mg-create-header">
+					<h2>IV Huolto ja tuki</h2>
+				</div>
+				<div class="event-show-supports">
+					<p>@Model.Supports</p>
+				</div>
+				<div class="event-show-medical">
+					<p><strong>Lääkintä:</strong></p>
+					<p>@Model.MedicalSettings</p>
+				</div>
+				<div class="event-show-respawn">
+					<p><strong>Respawn:</strong></p>
+					<p>@Model.Respawn</p>
+				</div>
+
+				<!--viides part task-->
+				<div class="event-mg-create-header">
+					<h2>V Johtaminen & Viestintä</h2>
+				</div>
+				<div class="event-show-comss">
+					<p><strong>Lääkintä:</strong></p>
+					<p>@Model.Comms</p>
+				</div>
+				<div class="event-show-other">
+					<p><strong>Lääkintä:</strong></p>
+					<p>@Model.Other</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<!--Roolit-->
+	<div class="event-slots-container ">
+		<div class="event-show-header">
+			<h4>ILMOITTAUMINEN</h4>
+		</div>
+			<div class="event-show-slots-top">
+				<div class="event-show-slots-minmax">
+					<p>Min. pelaajamäärä: @Model.MinPlayers</p>
+					<p>(Tarkistus: @Model.SlottingCheckTime.ToLocalTime().ToString("dd.MM HH:mm"))</p>
+					<p>Max. pelaajamäärä: @Model.MaxPlayers</p>
+				</div>
+				<div class="event-show-slots-status">
+					<h5 class="@(slotOpen ? "slots-status-open" : "slots-status-close")">
+						@(slotOpen ? "AUKI" : "KIINNI")
+					</h5>
+				</div>
+				<div class="event-show-slots-open">
+					<p>Ilmoittauminen aukeaa</p>
+					<p>@Model.SlottingOpenTime.ToLocalTime().ToString("dd.MM") klo. @Model.SlottingOpenTime.ToLocalTime().ToString("HH:mm").</p>
+					<p>Johtoroolit aukeavat</p>
+					<p>@Model.LeaderSlottingOpenTime.ToLocalTime().ToString("dd.MM") klo. @Model.LeaderSlottingOpenTime.ToLocalTime().ToString("HH:mm").</p>
+				</div>
+			</div>
+		<div class="event-show-roles-cont">
+			@foreach (var roleBox in roleBoxes)
+			{
+				<div class="event-show-role-box">
+					<h3>@roleBox.Name</h3>
+					<table class="event-show-role-table">
+						<thead>
+							<tr>
+								<th>Rooli</th>
+								<th>Radiokutsu</th>
+								<th>Pelaaja</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach (var role in roleBox.Roles)
+							{
+								<tr>
+									<td>@role.Name</td>
+									<td>@role.RadioCall</td>
+									<td>
+										@if (role.Player?.Username == currentUser)
+										{
+											<form asp-action="CancelSignup" method="post" class="show-cancel-form">
+												<input type="hidden" name="roleId" value="@role.IdStr" />
+												<input type="hidden" name="eventId" value="@Model.IdStr" />
+												@role.Player?.Community
+												@(string.IsNullOrEmpty(role.Player?.Nickname) ? role.Player?.Username : role.Player?.Nickname)
+												<button type="submit" class="event-show-sign-btns show-cancel">Peru</button>
+											</form>
+										}
+										else if (string.IsNullOrEmpty(role.Player?.Username) && !userAlreadySigned)
+										{
+											var showSlot = false;
+
+											if (role.IsLeaderSlot)
+											{
+												if (lsSlotOpen)
+												{
+													showSlot = true;
+												}
+											}
+											else
+											{
+												if (slotOpen)
+												{
+													showSlot = true;
+												}
+											}
+
+											if (showSlot)
+											{
+												<form asp-action="Signup" method="post" class="show-sign-form">
+													<input type="hidden" name="roleId" value="@role.IdStr" />
+													<input type="hidden" name="eventId" value="@Model.IdStr" />
+													<button type="submit" class="event-show-sign-btns show-sign">Ilmoittaudu</button>
+												</form>
+											}
+										}
+										else
+										{
+											@role.Player?.Community
+											@(string.IsNullOrEmpty(role.Player?.Nickname) ? role.Player?.Username : role.Player?.Nickname)
+										}
+									</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+					}
+				
+			
+		</div>
+	</div>
+</div>
+
+@section Scripts {
+<script>
+	</script>
+}

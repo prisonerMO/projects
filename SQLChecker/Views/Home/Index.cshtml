@@ -1,0 +1,39 @@
+﻿@using Microsoft.AspNetCore.Components
+@model List<SQLChecker.Models.Course>
+<div class="container py-4">
+    @if (User.Identity.IsAuthenticated)
+    {
+        <h2 class="dj-page-title">Kurssit</h2>
+        <div class="course-grid">
+            @foreach (var course in Model)
+            {
+                <a class="course-card" href="/Workbench?courseId=@course.CourseIdStr" style="text-decoration:none; color:inherit;">
+                    <div class="card-image">
+                        <img src="https://picsum.photos/400/200" alt="@course.CourseName" />
+                    </div>
+                    <div class="card-content">
+                        <h3 class="card-title">⭐ @course.CourseName</h3>
+                        <p class="card-id">@course.CourseIdStr</p>
+                        <div class="card-footer-row">
+                            <span>Tehtäväkokonaisuuksia: @(course.Assignments?.Count ?? 0)</span>
+                        </div>
+                    </div>
+                </a>
+            }
+
+            @if (User.IsInRole("Admin"))
+            {
+
+                <div class="course-card add-card" onclick="openCreateCourseModal()">
+                    <div class="add-content">
+                        <span class="add-icon">+</span>
+                        <p>Lisää uusi kurssi</p>
+                    </div>
+                </div>    
+            }
+        </div>
+    } else {
+        <h2 class="dj-page-title">Tervetuloa SQLCheckeriin!</h2>
+        <p>Kirjaudu sisään nähdäksesi kurssit.</p>
+     }
+</div>

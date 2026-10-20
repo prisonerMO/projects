@@ -1,0 +1,1167 @@
+﻿@using AOK.Models.Services
+@using AOK.Models
+@using AOK.ViewModels
+@using MongoDB.Bson;
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Forms
+@inject IWebHostEnvironment WebHostEnvironment
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Luo Tapahtuma</PageTitle>
+
+@if (ViewModel.Event != null)
+{
+	<div class="event-panel-header-container ">
+		<div class="event-mg-create-header">
+			<h2>Palvelin tiedot</h2>
+		</div>
+	</div>
+	<div class="event-mg-container">
+		<EditForm Model="ViewModel.Event" OnValidSubmit="SaveEvent">
+			<DataAnnotationsValidator />
+			<ValidationSummary />
+			<!--Community, Servers, mods, TilteImage-->
+			<div class="event-mg-csmt">
+				<div class="event-mg-cgmp">
+					<div class="event-mg-community">
+						<div class="mb-3">
+							<label for="cp-community">Järjestäjä</label>
+							<select id="cp-community" class="form-select" @bind="SelectedCommunityId" required>
+								<option value="">Valitse yhteisö</option>
+								@foreach (var community in ViewModel.Communities)
+								{
+									<option value="@community.IdStr">@community.Name</option>
+								}
+							</select>
+							<ValidationMessage For="@(() => SelectedCommunityId)" />
+						</div>
+					</div>
+
+					<!-- Game -->
+					<div class="event-mg-game">
+						<div class="mb-3">
+							<label for="cp-game">Peli</label>
+							<select id="cp-game" class="form-select" @bind="SelectedGameId">
+								>
+								<option value="">Valitse peli</option>
+								@foreach (var game in ViewModel.Games)
+								{
+
+									<option value="@game.IdStr">@game.Name</option>
+
+								}
+							</select>
+						</div>
+					</div>
+					<!-- ModPreset Input -->
+					<div class="event-mg-mods">
+						<label for="cp-mods">ModPreset</label>
+
+						<div class="choose-image-conte">
+							<InputFile OnChange="HandleModsSelected" id="cp-img-up" class="form-control" accept=".html" />
+						</div>
+						@if (!string.IsNullOrEmpty(ViewModel.Event.ModPreset))
+						{
+							<div class="event-mg-mods-a">
+								<a href="@($"File/FetchFile?subFolder=ModLists&target={ViewModel.Event.ModPreset}")" download>
+									@ViewModel.Event.ModPreset
+								</a>
+							</div>
+						}
+					</div>
+
+					<!-- ImageUrl -->
+					@if (string.IsNullOrEmpty(ViewModel.Event.TitleImageUrl))
+					{
+						<div class="choose-image-container">
+							<label for="cp-img-up">Otsikko kuva</label>
+							<div class="choose-image-conte">
+								<InputFile OnChange="HandleImageSelected" id="cp-img-up" class="form-control" accept="image/jpeg" />
+							</div>
+							<div class="choose-image-conte">
+								<p class="mb-0">tai..</p>
+								<div class="dropdown">
+									<button class="dropdown-toggle event-mg-dropdown-btn" type="button" data-bs-toggle="dropdown">
+										Valitse kuva...
+									</button>
+									<ul class="dropdown-menu">
+										@foreach (var pic in ViewModel.Pictures)
+										{
+											<li>
+												<a class="dropdown-item" @onclick="() => SelectPicture(pic)">
+													<img src="@($"File/FetchFile?subFolder=Events&target={pic}")" alt="@pic" style="height: 50px; margin-right: 10px;" />
+													@($"{ViewModel.Pictures.IndexOf(pic)}.jpg")
+												</a>
+											</li>
+										}
+									</ul>
+								</div>
+							</div>
+						</div>
+					}
+					else
+					{
+
+						<div class="event-image-container">
+							<div class="mt-3">
+								<img src="@($"File/FetchFile?subFolder=Events&target={ViewModel.Event.TitleImageUrl}")" alt="Uploaded Image" style="object-fit: cover;" />
+							</div>
+							<button type="button" class="event-btn-delete event-image-del-btn" @onclick="DeleteTitlePicture">Poista</button>
+						</div>
+					}
+				</div>
+				<!-- Game Server -->
+				<div class="event-mg-servers-container">
+					<div class="event-mg-gs">
+						<div class="mb-3">
+							<label for="cp-server">Peli Palvelin</label>
+							<select id="cp-server" class="form-select" @bind="SelectedServerId">
+								<option value="">Valitse</option>
+								@foreach (var gs in ViewModel.GameServers)
+								{
+									<option value="@gs.IdStr">@gs.Name</option>
+								}
+							</select>
+						</div>
+
+						<div class="mb-3">
+							<label for="cp-server-name">Nimi</label>
+							<InputText id="cp-server-name" class="form-control" @bind-Value=" ViewModel.GameServerInput.Name" />
+						</div>
+						<div class="mb-3">
+							<label for="cp-server-ip">Osoite</label>
+							<InputText id="cp-server-ip" class="form-control" @bind-Value=" ViewModel.GameServerInput.IP" />
+						</div>
+
+						<div class="mb-3">
+							<label for="cp-server-port">Portti</label>
+							<InputNumber id="cp-server-port" class="form-control" @bind-Value=" ViewModel.GameServerInput.Port" />
+						</div>
+
+						<div class="mb-3">
+							<label for="cp-server-pass">Salasana</label>
+							<InputText id="cp-server-pass" class="form-control" @bind-Value=" ViewModel.GameServerInput.Password" />
+						</div>
+					</div>
+				</div>
+				<div class="event-mg-servers-container">
+					<div class="event-mg-ts">
+						<div class="mb-3">
+							<label for="cp-ts-server">TS Palvelin</label>
+							<select id="cp-ts-server" class="form-select" @bind="SelectedTSServerId">
+								<option value="">Valitse</option>
+								@foreach (var ts in ViewModel.TSServers)
+								{
+									<option value="@ts.IdStr">@ts.Name</option>
+								}
+							</select>
+						</div>
+
+						<div class="mb-3">
+							<label for="cp-ts-server-name">Nimi</label>
+							<InputText id="cp-ts-server-name" class="form-control" @bind-Value="ViewModel.TSServerInput.Name" />
+						</div>
+						<div class="mb-3">
+							<label for="cp-ts-server-ip">Osoite</label>
+							<InputText id="cp-ts-server-ip" class="form-control" @bind-Value="ViewModel.TSServerInput.IP" />
+						</div>
+						<div class="mb-3">
+							<label for="cp-ts-server-port">Portti</label>
+							<InputNumber id="cp-ts-server-port" class="form-control" @bind-Value="ViewModel.TSServerInput.Port" />
+						</div>
+						<div class="mb-3">
+							<label for="cp-ts-server-pass">Salasana</label>
+							<InputText id="cp-ts-server-pass" class="form-control" @bind-Value="ViewModel.TSServerInput.Password" />
+						</div>
+					</div>
+				</div>
+
+				<!-- Max Min players -->
+				<div class="event-mg-minmaxp">
+					<div class="mb-3">
+						<label for="cp-minp">Min. Pelaaja määrä</label>
+						<InputNumber id="cp-minp" class="form-control" @bind-Value="ViewModel.Event.MinPlayers" />
+					</div>
+					<div class="mb-3">
+						<label for="cp-maxp">Max. Pelaaja määrä</label>
+						<InputNumber id="cp-maxp" class="form-control" @bind-Value="ViewModel.Event.MaxPlayers" />
+					</div>
+				</div>
+
+			</div>
+
+
+
+			<!-- Säännöt -->
+			<div class="event-panel-header-container ">
+				<div class="event-panel-headers">
+					<h3>Säännöt</h3>
+				</div>
+			</div>
+			<div class="event-mg-rule-container">
+				@if (ViewModel.Rules?.Count > 0)
+				{
+					<ul class="list-group">
+						@foreach (var rule in ViewModel.Rules)
+						{
+							<li class="list-group-item d-flex justify-content-between align-items-start flex-column">
+								<div class="fw-bold">@rule.Title</div>
+								<div style="white-space: pre-line;">@rule.Description</div>
+								<div class="d-flex align-items-center mt-2">
+									<label class="me-2">Järjestys:</label>
+									<select class="form-select form-select-sm w-80"
+									@onchange="e => ChangeOrder(rule, int.Parse(e.Value.ToString()))">
+										@for (int i = 1; i <= ViewModel.Rules.Count; i++)
+										{
+											<option value="@i" selected="@(i == rule.Order)">@i</option>
+										}
+									</select>
+									<button type="button" class="event-btn-modify" @onclick="() => ViewModel.ModifyRule(rule.IdStr)">
+										Muokkaa
+									</button>
+									<button type="button" class="event-btn-delete" @onclick="() => ViewModel.RemoveRule(rule.IdStr)">
+										Poista
+									</button>
+
+								</div>
+							</li>
+						}
+					</ul>
+				}
+				<div class="event-mg-selectrule-cont">
+					<div class="event-mg-selectrule">
+						<button type="button" class="event-btn-rule" @onclick="ViewModel.OpenRuleModal">+ Lisää sääntö</button>
+					</div>
+					<p>tai..</p>
+					<div class="event-mg-selectrule">
+						<select id="cp-templateSelect" class="form-select" @bind="SelectedRuleTempId">
+							<option value="">Valitse pohja...</option>
+							@foreach (var ruletemp in ViewModel.RuleTemplates)
+							{
+								<option value="@ruletemp._id.ToString()">
+									@(ruletemp.Title.Length > 15 ? ruletemp.Title.Substring(0, 15) + "..." : ruletemp.Title)
+								</option>
+							}
+						</select>
+					</div>
+				</div>
+			</div>
+
+			<!--kuvas-->
+			<div class="event-panel-header-container ">
+				<div class="event-panel-headers">
+					<h3>Kuvaus</h3>
+				</div>
+			</div>
+			<div class="event-mg-tmd">
+				<!-- Title Input -->
+				<div class="event-mg-tmd-cont">
+					<label for="cp-title">Tehtävän nimi</label>
+					<InputText id="cp-title" class="form-control" @bind-Value="ViewModel.Event.Title" />
+				</div>
+
+				<!-- Map Input -->
+				<div class="event-mg-tmd-cont">
+					<label for="cp-map">Kartta</label>
+					<InputText id="cp-map" class="form-control" @bind-Value="ViewModel.Event.Map" />
+				</div>
+
+				<!-- Description Input -->
+				<div class="event-mg-tmd-cont">
+					<label for="cp-desc">Kuvaus</label>
+					<InputTextArea id="cp-desc" class="form-control" @bind-Value="ViewModel.Event.Description" />
+				</div>
+			</div>
+
+			<!--Aikataulut-->
+			<div class="event-panel-header-container ">
+				<div class="event-panel-headers">
+					<h3>Aikataulut</h3>
+				</div>
+			</div>
+			<div class="event-mg-schedule-container">
+				<div class="event-mg-mtime">
+					<!-- Start and End Date -->
+					<div class="event-mg-shedule-c">
+						<label for="cp-mstime">Alkamisaika</label>
+						<div class="d-flex">
+							<input id="cp-mstime" class="form-control me-2" type="datetime-local" name="StartDate" placeholder="yyyy-MM-ddThh:mm" @bind="StartDate" />
+						</div>
+					</div>
+
+					<div class="event-mg-shedule-c">
+						<label for="cp-metime">Loppumisaika</label>
+						<div class="d-flex">
+							<input id="cp-metime" class="form-control me-2" type="datetime-local" name="EndDate" @bind="EndDate" />
+						</div>
+					</div>
+					<!-- Duration -->
+					<div class="event-mg-shedule-cd">
+						<label for="cp-mdtime">Kesto (min)</label>
+						<InputNumber id="cp-mdtime" class="form-control" @bind-Value="ViewModel.Event.Duration" />
+					</div>
+				</div>
+
+				<div class="event-mg-stime">
+					<!-- Slotting Date and Time -->
+					<div class="event-mg-shedule-c">
+						<label for="cp-slottime">Ilmoittautuminen alkaa</label>
+						<div class="d-flex">
+							<input id="cp-slottime" class="form-control me-2" type="datetime-local" name="SlottingDate" @bind="ViewModel.Event.SlottingOpenTime" />
+						</div>
+					</div>
+
+					<!-- Leader Slotting Date and Time -->
+					<div class="event-mg-shedule-c">
+						<label for="cp-lslottime">Johtajien ilmoittautuminen alkaa</label>
+						<div class="d-flex">
+							<input id="cp-lslottime" class="form-control me-2" type="datetime-local" name="LeaderSlottingDate" @bind="ViewModel.Event.LeaderSlottingOpenTime" />
+						</div>
+					</div>
+
+					<!-- Slotting Check Date and Time -->
+					<div class="event-mg-shedule-c">
+						<label for="cp-slotchecktime">Ilmoittautuminen tarkastus</label>
+						<div class="d-flex">
+							<input id="cp-slotchecktime" class="form-control me-2" type="datetime-local" name="SlottingCheckDate" @bind="ViewModel.Event.SlottingCheckTime" />
+						</div>
+					</div>
+				</div>
+				<div class="event-mg-ptime">
+					<!-- Planning Start Date and Time -->
+					<div class="event-mg-shedule-c">
+						<label for="cp-plantime">Suunnittelu alkaa</label>
+						<div class="d-flex">
+							<input id="cp-plantime" class="form-control me-2" type="datetime-local" name="PlanStartDate" @bind="ViewModel.Event.PlanStartTime" />
+						</div>
+					</div>
+
+					<!-- Planning Duration -->
+					<div class="event-mg-shedule-cd">
+						<label for="cp-plandtime">Suunnittelun kesto (min)</label>
+						<InputNumber id="cp-plandtime" class="form-control" @bind-Value="ViewModel.Event.PlanDuration" />
+					</div>
+				</div>
+			</div>
+
+			<div class="event-panel-header-container ">
+				<div class="event-panel-headers">
+					<h3>Tehtävän tiedot</h3>
+				</div>
+			</div>
+			<!-- Mission Date and Time -->
+			<div class="event-mg-mdate-container">
+				<div class="event-mg-mdate">
+					<div class="mb-3">
+						<label for="cp-mdatetime">Tehtävän tapahtuma-aika</label>
+						<div class="d-flex">
+							<input id="cp-mdatetime" class="form-control me-2" type="datetime-local" name="MissionDate" @bind="ViewModel.Event.MissionDate" />
+						</div>
+					</div>
+				</div>
+			</div>
+
+
+			<!--Tilanne-->
+			<div class="event-mg-situation">
+				<div class="mb-3">
+					<label for="cp-weather">Sää</label>
+					<InputTextArea id="cp-weather" class="form-control" @bind-Value="ViewModel.Event.Weather" placeholder="Sää" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-situation">Tilanne</label>
+					<InputTextArea id="cp-situation" class="form-control" @bind-Value="ViewModel.Event.Situation" placeholder="Tilanne" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-friendlies">Omat joukot</label>
+					<InputTextArea id="cp-friendlies" class="form-control" @bind-Value="ViewModel.Event.Friendlies" placeholder="Omat joukot" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-enemies">Viholliset</label>
+					<InputTextArea id="cp-enemies" class="form-control" @bind-Value="ViewModel.Event.Enemies" placeholder="Viholliset" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-civilians">Siviilit</label>
+					<InputTextArea id="cp-civilians" class="form-control" @bind-Value="ViewModel.Event.Civilians" placeholder="Siviilit" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-roe">ROE</label>
+					<InputTextArea id="cp-roe" class="form-control" @bind-Value="ViewModel.Event.ROE" placeholder="ROE" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-assests">Kalusto</label>
+					<InputTextArea id="cp-assests" class="form-control" @bind-Value="ViewModel.Event.Assests" placeholder="Kalusto" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-mission">Tehtävä</label>
+					<InputTextArea id="cp-mission" class="form-control" @bind-Value="ViewModel.Event.Mission" placeholder="Tehtävä" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-process">Suoritus</label>
+					<InputTextArea id="cp-process" class="form-control" @bind-Value="ViewModel.Event.Process" placeholder="Suoritus" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-supports">Huolto ja tuki</label>
+					<InputTextArea id="cp-supports" class="form-control" @bind-Value="ViewModel.Event.Supports" placeholder="Tuki" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-medical">Medical tiedot</label>
+					<InputTextArea id="cp-medical" class="form-control" @bind-Value="ViewModel.Event.MedicalSettings" placeholder="Medical tiedot" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-respawn">Respawn</label>
+					<InputTextArea id="cp-respawn" class="form-control" @bind-Value="ViewModel.Event.Respawn" placeholder="Respawn" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-comms">Viestintä</label>
+					<InputTextArea id="cp-comms" class="form-control" @bind-Value="ViewModel.Event.Comms" placeholder="Viestintä" />
+				</div>
+				<div class="mb-3">
+					<label for="cp-other">Muuta</label>
+					<InputTextArea id="cp-other" class="form-control" @bind-Value="ViewModel.Event.Other" placeholder="Muuta" />
+				</div>
+			</div>
+
+			<!--Ilmoittautuminen-->
+			<div class="event-panel-header-container ">
+				<div class="event-panel-headers">
+					<h3>Ilmoittautuminen</h3>
+				</div>
+			</div>
+
+			@if (ViewModel.RoleBoxes.Any())
+			{
+				<div class="event-mg-rb-container">
+					@foreach (var box in ViewModel.RoleBoxes.Where(b => !string.IsNullOrWhiteSpace(b.Name)))
+					{
+						<div class="event-mg-rb-cont">
+							<h3>@box.Name</h3>
+							<table class="event-mg-rb-table">
+								<thead>
+									<tr>
+										<th>Roolit</th>
+									</tr>
+								</thead>
+								<tbody>
+									@if (box.Roles != null && box.Roles.Any())
+									{
+										foreach (var role in box.Roles)
+										{
+											<tr>
+												<td>@role.Name</td>
+											</tr>
+										}
+									}
+									else
+									{
+										<tr>
+											<td colspan="2">Ei rooleja tässä boksissa.</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+							<div class="event-mg-rb-order">
+								<div class="event-mg-rb-row">
+									<label class="event-mg-rb-label-inline">No.</label>
+									<select class="form-select form-select-sm w-auto"
+									@bind="box.Order"
+									@bind:after="() => ChangeBoxOrder(box, box.Order)">
+										@for (int a = 1; a <= ViewModel.RoleBoxes.Count; a++)
+										{
+											<option value="@a">@a</option>
+										}
+									</select>
+								</div>
+								<div class="event-mg-rb-row">
+
+									<button type="button" class="event-btn-modify" @onclick="() => ViewModel.ShowBoxData(box)">Muokkaa</button>
+									<button type="button" class="event-btn-delete" @onclick="() => ViewModel.DeleteRoleBox(box._id)">Poista</button>
+								</div>
+							</div>
+						</div>
+					}
+				</div>
+			}
+
+			else
+			{
+				<p>Ryhmiä ei löytynyt.</p>
+			}
+
+			<hr />
+			<div class="event-mg-selectrole">
+				<div class="col-auto">
+					<button type="button" class="event-btn-create" @onclick="ViewModel.OpenRoleBoxModal">+ Luo ryhmä</button>
+				</div>
+				<p class="mb-0">tai...</p>
+				<div class="col-auto">
+					<select id="cp-templateroleSelect" class="form-select" @bind="SelectedTemplateId">
+						<option value="">Valitse pohja...</option>
+						@foreach (var template in ViewModel.RoleBoxTemplates)
+						{
+							<option value="@template.IdStr">@($"({template.Roles.Count}) {template.Name} ")</option>
+						}
+					</select>
+				</div>
+			</div>
+
+			<div class="event-panel-header-container">
+				<div class="event-panel-headers">
+					<h3>Tallennus</h3>
+				</div>
+			</div>
+
+			<!-- Published Checkbox -->
+			<div class="event-mg-save">
+				<div class="event-mg-save-cont">
+					<div class="save-header">
+						<label for="cp-pub">Tapahtuman näkyvyys</label>
+					</div>
+					<div class="pub-cont">
+						<input id="cp-publ" class="form-check-input" type="checkbox" @bind="ViewModel.Event.Published" />
+						<label for="cp-publ" form-check-label">Julkaistu</label>
+					</div>
+				</div>
+				<div class="event-mg-save-cont">
+					<div class="save-header">
+						<label for="cp-save">Tapahtuman tallennus</label>
+					</div>
+					<button type="submit" class="event-btn-create">Tallenna</button>
+				</div>
+			</div>
+		</EditForm>
+	</div>
+	@if (IsSaving)
+	{
+		<div class="saving-modal">
+			<div class="saving-modal-content">
+				Tallennetaan tapahtumaa...
+			</div>
+		</div>
+	}
+	else if (!string.IsNullOrEmpty(SuccessMessage))
+	{
+		<div class="saving-modal">
+			<div class="saving-modal-content text-success">
+				@SuccessMessage
+			</div>
+		</div>
+	}
+
+	<!--Modals for Roles and Rules-->
+
+	<div class="modal fade @(ViewModel.IsRoleBoxModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog event-mg-rb-cm">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">@(ViewModel.NewRoleBox._id != ObjectId.Empty ? "Muokkaa rooliboxia" : "Luo uusi roolibox")</h5>
+					<button type="button" class="btn-close" @onclick="ViewModel.CloseRoleBoxModal"></button>
+				</div>
+				<div class="modal-body">
+					<div class="event-mg-rb-cm-name">
+						<label for="cp-rnewName">Ryhmän Nimi</label>
+						<input id="cp-rnewName" class="form-control" @bind="ViewModel.NewRoleBox.Name" />
+					</div>
+					<div class="event-mg-rb-cm-rolemod">
+						<p>Roolien muokkaus</p>
+					</div>
+					<div class="event-mg-rb-cm-roleform">
+						<div class="event-mg-form-section">
+							<label>Rooli</label>
+							<select class="form-select" @bind="ViewModel.NewRoleBoxRole.Name">
+								<option disabled selected value="">-- Valitse rooli --</option>
+								@foreach (var role in ViewModel.Roles)
+								{
+									<option value="@role.Name">@role.Name</option>
+								}
+							</select>
+						</div>
+
+						<div class="event-mg-form-section">
+							<label>Radiokutsu</label>
+							<input class="form-control" @bind="ViewModel.NewRoleBoxRole.RadioCall" placeholder="Radiokutsu" />
+						</div>
+
+						<div class="event-mg-form-section">
+							<label>Järjestys</label>
+							<input type="number" class="form-control event-mg-role-n" @bind="ViewModel.NewRoleBoxRole.Order" placeholder="Järjestys" />
+						</div>
+
+						<div class="event-mg-form-section event-mg-checkbox-section">
+							<label>J.Slot</label>
+							<input class="form-check-input" type="checkbox" @bind="ViewModel.NewRoleBoxRole.IsLeaderSlot" />
+						</div>
+
+						<div class="event-mg-form-section event-mg-checkbox-button">
+							<button type="button" class="event-btn-create" @onclick="ViewModel.AddRoleToRoleBox">
+								<span class="pc-add">+ Lisää</span>
+								<span class="mt-add">+</span>
+								</button>
+						</div>
+					</div>
+					<ul class="list-group event-mg-rb-list">
+						@foreach (var eRole in ViewModel.NewRoleBox.Roles.OrderBy(r => r.Order))
+						{
+							<li>
+								<span class="text-primary" style="cursor:pointer;" @onclick="() => ViewModel.StartEditingRole(eRole)">
+									@eRole.Name
+								</span>
+								<span class="text-primary text-center">@eRole.RadioCall</span>
+
+								<input type="number" class="form-control form-control-sm event-mg-list-n"
+								@bind="eRole.Order"
+								@bind:after="() => ViewModel.ChangeRoleOrder(eRole)" />
+
+								<span class="text-primary text-center">
+									@(eRole.IsLeaderSlot ? "true" : "false")
+								</span>
+								<button type="button" class="event-btn-delete" @onclick="() => ViewModel.RemoveRoleFromNewRoleBox(eRole.IdStr)">Poista</button>
+							</li>
+						}
+					</ul>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="event-btn-cancel" @onclick="ViewModel.CloseRoleBoxModal">Peruuta</button>
+					<button type="button" class="event-btn-create" @onclick="CreateRoleBoxFromModal">
+						@(ViewModel.NewRoleBox._id != ObjectId.Empty ? "Tallenna" : "Luo")
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal @(ViewModel.IsRuleOpen ? "d-block show" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1050;">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h4 class="modal-title">
+						@(ViewModel.newRule._id != ObjectId.Empty ? "Muokkaa sääntöä" : "Luo uusi sääntö")
+					</h4>
+					<button type="button" class="btn-close" @onclick="() => ViewModel.IsRuleOpen = false"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="ruleTitle">Otsikko</label>
+						<input type="text" id="ruleTitle" class="form-control"
+						@bind="ViewModel.newRule.Title"
+						placeholder="Anna säännön otsikko" />
+					</div>
+
+					<div class="mb-3">
+						<label for="ruleDesc">Kuvaus</label>
+						<textarea id="ruleDesc" class="form-control"
+						@bind="ViewModel.newRule.Description"
+						placeholder="Kirjoita säännön kuvaus"></textarea>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="event-btn-cancel" @onclick="() => ViewModel.IsRuleOpen = false">Peruuta</button>
+					<button type="button" class="event-btn-create" @onclick="AddRule">
+						@(ViewModel.newRule._id != ObjectId.Empty ? "Tallenna" : "Lisää")
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+else
+{
+	<p class="text-danger">Virhe: Tapahtuma ei ole alustettu.</p>
+}
+
+@* @if (ViewModel.ShowEdiRole && ViewModel.SelectedRole != null) *@
+@* {*@
+@*     <div class="modal show d-block" tabindex="-1"> *@
+@*         <div class="modal-dialog"> *@
+@*             <div class="modal-content"> *@
+@*                 <div class="modal-header"> *@
+@*                     <h5 class="modal-title">Muokkaa roolia</h5> *@
+@*                     <button type="button" class="btn-close" @onclick="ViewModel.CancelEditingRole"></button> *@
+@*                 </div> *@
+@*                 <div class="modal-body"> *@
+@*                     <div class="mb-3"> *@
+@*                         <label for="cp-erole">Lisää rooli</label> *@
+@*                         <div class="input-group"> *@
+@*                             <select id="cp-erole" class="form-select" @bind="ViewModel.SelectedRole.Name"> *@
+@*                                 <option disabled selected value="">-- Valitse rooli --</option> *@
+@*                                 @foreach (var role in ViewModel.Roles) *@
+@*                                 { *@
+@*                                     <option value="@role.IdStr">@role.Name</option> *@
+@*                                 } *@
+@*                             </select> *@
+@*                             <select id="cp-select-radio" class="form-select" @bind="ViewModel.SelectedRole.Radios"> *@
+@*                                 <option disabled selected value="">-- Valitse radio --</option> *@
+@*                                 @foreach (var radio in ViewModel.Radios) *@
+@*                                 { *@
+@*                                     <option value="@radio">@radio.Name</option> <!-- assumes Radio objects --> *@
+@*                                 } *@
+@*                             </select> *@
+@*                             <select class="form-select" @bind="ViewModel.SelectedRole.Username"> *@
+@*                                 <option disabled selected value="">-- Valitse pelaaja --</option> *@
+@*                                 @foreach (var member in ViewModel.OwnCommunityUsers) *@
+@*                                 { *@
+@*                                     <option value="@member.UsernameN">@member.Nickname</option> *@
+@*                                 } *@
+@*                             </select> *@
+
+@*                             <input type="number" class="form-control" placeholder="Järjestys" @bind="ViewModel.SelectedRole.Order" /> *@
+@*                             <div class="form-check px-2"> *@
+@*                                 <input class="form-check-input" type="checkbox" id="cp-eisLeaderSlot" @bind="ViewModel.SelectedBoxIsLeaderSlot" /> *@
+@*                                 <label class="form-check-label" for="cp-eisLeaderSlot">Johtaja slot</label> *@
+@*                             </div> *@
+@*                             <button class="btn btn-outline-primary" @onclick="ViewModel.AddRoleToSelectedBox">+</button> *@
+@*                         </div> *@
+@*                     </div> *@
+@*                 </div> *@
+@*                 <div class="modal-footer"> *@
+@*                     <button class="btn btn-secondary" @onclick="ViewModel.CancelEditingRole">Peruuta</button> *@
+@*                     <button class="btn btn-primary" @onclick="() => ViewModel.SaveEditedRole(role.IdStr)">Tallenna</button> *@
+@*                 </div> *@
+@*             </div> *@
+@*         </div> *@
+@*     </div> *@
+@*     <div class="modal-backdrop fade show"></div> *@
+@* } *@
+
+@code {
+	[Parameter]
+	public EventManagerViewModel ViewModel { get; set; }
+	private bool IsSaving = false;
+	private string SuccessMessage { get; set; } = string.Empty;
+	private string _selectedTSServerId;
+	private string _selectedServerId;
+	private string _selectedCommunityId;
+	private string _selectedTemplateId;
+	private string _selectedGameId;
+	private string _selectedRuleTempId;
+
+	private DateTime? _startDate;
+	private DateTime? StartDate
+	{
+		get => _startDate;
+		set
+		{
+			if (value.HasValue && EndDate.HasValue && value.Value > EndDate.Value)
+			{
+				_startDate = EndDate;
+			}
+			else
+			{
+				_startDate = value;
+			}
+
+			StateHasChanged();
+		}
+	}
+	private DateTime? _endDate;
+	private DateTime? EndDate
+	{
+		get => _endDate;
+		set
+		{
+			if (value.HasValue && StartDate.HasValue && value.Value < StartDate.Value)
+			{
+				_endDate = StartDate;
+			}
+			else
+			{
+				_endDate = value;
+			}
+
+			StateHasChanged();
+		}
+	}
+	private string SelectedCommunityId
+	{
+		get => _selectedCommunityId;
+		set
+		{
+			_selectedCommunityId = value;
+			ViewModel.OnCommunitySelected(value);
+		}
+	}
+	private string SelectedGameId
+	{
+		get => _selectedGameId;
+		set
+		{
+			_selectedGameId = value;
+			ViewModel.OnGameSelected(value);
+		}
+	}
+	private string SelectedServerId
+	{
+		get => _selectedServerId;
+		set
+		{
+			_selectedServerId = value;
+			ViewModel.OnGameServerSelected(value);
+		}
+	}
+
+	private string SelectedTSServerId
+	{
+		get => _selectedTSServerId;
+		set
+		{
+			_selectedTSServerId = value;
+			ViewModel.OnTSServerSelected(value);
+		}
+	}
+
+	private string SelectedTemplateId
+	{
+		get => _selectedTemplateId;
+		set
+		{
+			_selectedTemplateId = value;
+			OnTemplateSelected(value);
+		}
+	}
+
+	private string SelectedRuleTempId
+	{
+		get => _selectedRuleTempId;
+		set
+		{
+			_selectedTemplateId = value;
+			OnRuleTempSelected(value);
+		}
+	}
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		ViewModel.Games = await DB_Services.GetAllAsync<Game>();
+		ViewModel.GameServers = await DB_Services.GetAllAsync<GameServer>();
+		ViewModel.TSServers = await DB_Services.GetAllAsync<TSServer>();
+		ViewModel.Communities = await DB_Services.GetAllAsync<Community>();
+		ViewModel.Roles = await DB_Services.GetAllAsync<Role>();
+		ViewModel.RoleBoxTemplates = await DB_Services.GetAllAsync<RoleBox>();
+		ViewModel.RuleTemplates = await DB_Services.GetAllAsync<Rule>();
+		ViewModel.Radios = new List<Radio>
+		{
+			new Radio { Name = "77", RadioCall = "A1", Channel = "77" },
+			new Radio { Name = "343", RadioCall = "B1", Channel = "343" },
+			new Radio { Name = "512", RadioCall = "C1", Channel = "512" }
+		};
+		ViewModel.OwnCommunityUsers = await DB_Services.GetUsersInSameCommunityAsync(ViewModel.CurrentUser);
+		ViewModel.NewRoleBoxRole.Order = ViewModel.NewRoleBox.Roles.Count + 1;
+		LoadPictures();
+	}
+
+
+	private async Task SaveEvent()
+	{
+		if (ViewModel.Event == null) return;
+
+		var selectedCommunity = ViewModel.Communities.FirstOrDefault(c => c._id.ToString() == SelectedCommunityId);
+		if (selectedCommunity == null)
+		{
+			return;
+		}
+
+		IsSaving = true;
+		StateHasChanged();
+		await Task.Delay(2000);
+
+		ViewModel.Event.CreatedAt = DateTime.UtcNow;
+		ViewModel.Event.CreatedBy = ViewModel.CurrentUser.ToLower();
+		
+		ViewModel.Event.StartDate = ViewModel.ToUtc(StartDate ?? DateTime.MinValue);
+		ViewModel.Event.EndDate = ViewModel.ToUtc(EndDate ?? DateTime.MinValue);
+		ViewModel.Event.SlottingOpenTime = ViewModel.ToUtc(ViewModel.Event.SlottingOpenTime);
+		ViewModel.Event.LeaderSlottingOpenTime = ViewModel.ToUtc(ViewModel.Event.LeaderSlottingOpenTime);
+		ViewModel.Event.SlottingCheckTime = ViewModel.ToUtc(ViewModel.Event.SlottingCheckTime);
+		ViewModel.Event.PlanStartTime = ViewModel.ToUtc(ViewModel.Event.PlanStartTime);
+		ViewModel.Event.Community = selectedCommunity;
+		ViewModel.Event.Game = ViewModel.GameInput;
+		ViewModel.Event.GameServer = ViewModel.GameServerInput;
+		ViewModel.Event.TSServer = ViewModel.TSServerInput;
+		ViewModel.Event.Rules = ViewModel.Rules;
+
+		ViewModel.Event.RoleBoxes = ViewModel.RoleBoxes;
+
+		if (ViewModel.Event._id == ObjectId.Empty)
+		{
+			ViewModel.Event._id = ObjectId.GenerateNewId();
+		}
+
+		DB_Services.Save(ViewModel.Event);
+
+		IsSaving = false;
+
+		await ShowSuccessMessageAsync("Tapahtuma tallennettu onnistuneesti!");
+
+		Navigation.NavigateTo($"/Events/Show?id={ViewModel.Event._id}", true);
+	}
+	private async Task ShowSuccessMessageAsync(string message)
+	{
+		SuccessMessage = message;
+		StateHasChanged();
+
+		await Task.Delay(3000); // show message for 3 seconds
+
+		SuccessMessage = null;
+		StateHasChanged();
+	}
+
+	private void OnTemplateSelected(string id)
+	{
+		if (ObjectId.TryParse(id, out var objectId))
+		{
+			var selectedTemplate = ViewModel.RoleBoxTemplates.FirstOrDefault(t => t._id == objectId);
+			if (selectedTemplate != null)
+			{
+				ViewModel.NewRoleBox = new RoleBox
+					{
+						_id = ObjectId.GenerateNewId(),
+						Name = selectedTemplate.Name,
+						Order = ViewModel.RoleBoxes.Count + 1
+					};
+				ViewModel.NewRoleBox.Roles = selectedTemplate.Roles.Select(role => role.Clone()).ToList();
+				ViewModel.RoleBoxes.Add(ViewModel.NewRoleBox);
+			}		
+		
+		SelectedTemplateId = "";
+		StateHasChanged();
+		}
+	}
+
+
+
+	private void OnRuleTempSelected(string id)
+	{
+		if (ObjectId.TryParse(id, out var objectId))
+		{
+			var selectedTemplate = ViewModel.RuleTemplates.FirstOrDefault(t => t._id == objectId);
+			if (selectedTemplate != null)
+			{
+				ViewModel.newRule = new Rule
+					{
+						_id = selectedTemplate._id,
+						Title = selectedTemplate.Title,
+						Description = selectedTemplate.Description,
+						Order = ViewModel.Rules.Count + 1
+					};
+			}
+			ViewModel.Rules.Add(ViewModel.newRule);
+			SelectedRuleTempId = "";
+			StateHasChanged();
+		}
+	}
+
+	private void CreateRoleBoxFromModal()
+	{
+		if (ViewModel.NewRoleBox._id != ObjectId.Empty)
+		{
+			var existingRoleBox = ViewModel.RoleBoxes.FirstOrDefault(r => r._id == ViewModel.NewRoleBox._id);
+			if (existingRoleBox != null)
+			{
+				StateHasChanged();
+				ViewModel.CloseRoleBoxModal();
+			}
+
+		}
+		else
+		{
+			if (!string.IsNullOrWhiteSpace(ViewModel.NewRoleBox.Name))
+			{
+				var newRoleBox = new RoleBox
+					{
+						_id = ObjectId.GenerateNewId(),
+						Name = ViewModel.NewRoleBox.Name,
+						Roles = ViewModel.NewRoleBox.Roles,
+						Order = ViewModel.RoleBoxes.Count + 1
+					};
+				ViewModel.RoleBoxes.Add(newRoleBox);
+				ViewModel.NewRoleBox = new();
+				ViewModel.CloseRoleBoxModal();
+				StateHasChanged();
+			}
+		}
+		ViewModel.NewRoleBoxRole.Order = ViewModel.NewRoleBox.Roles.Count + 1;
+	}
+
+	private void AddRule()
+	{
+		if (!string.IsNullOrWhiteSpace(ViewModel.newRule?.Title))
+		{
+			var objectId = ViewModel.newRule._id != ObjectId.Empty
+				? ViewModel.newRule._id
+				: ObjectId.GenerateNewId();
+
+			var existingRule = ViewModel.Rules.FirstOrDefault(r => r._id == objectId);
+
+			if (existingRule != null)
+			{
+				existingRule.Title = ViewModel.newRule.Title;
+				existingRule.Description = ViewModel.newRule.Description;
+			}
+			else
+			{
+				var newRule = new Rule
+					{
+						_id = objectId,
+						Title = ViewModel.newRule.Title,
+						Description = ViewModel.newRule.Description,
+						Order = ViewModel.Rules.Count + 1
+					};
+				ViewModel.Rules.Add(newRule);
+			}
+
+			ViewModel.newRule = new Rule();
+			ViewModel.IsRuleOpen = false;
+			StateHasChanged();
+		}
+	}
+
+
+	private void ChangeOrder(Rule rule, int newOrder)
+	{
+		rule.Order = newOrder;
+		ViewModel.Rules = ViewModel.Rules.OrderBy(r => r.Order).ToList();
+		StateHasChanged();
+	}
+
+	private void ChangeBoxOrder(RoleBox box, int newOrder)
+	{
+		var roleBoxes = ViewModel.RoleBoxes.OrderBy(b => b.Order).ToList();
+		roleBoxes.RemoveAll(b => b._id == box._id);
+		newOrder = Math.Max(1, Math.Min(newOrder, roleBoxes.Count + 1));
+		box.Order = newOrder;
+		roleBoxes.Insert(newOrder - 1, box);
+		for (int i = 0; i < roleBoxes.Count; i++)
+		{
+			roleBoxes[i].Order = i + 1;
+		}
+
+		ViewModel.RoleBoxes = roleBoxes;
+
+		var updatedBox = ViewModel.RoleBoxes.FirstOrDefault(b => b._id == box._id);
+		if (updatedBox != null)
+		{
+			box.Order = updatedBox.Order; // update the reference used by the UI
+		}
+
+		StateHasChanged();
+	}
+
+
+
+
+	private void OnRadiosChanged(ChangeEventArgs e)
+	{
+		var selectedValues = e.Value as IEnumerable<string>;
+
+		if (selectedValues != null)
+		{
+			ViewModel.NewRoleBoxRole.Radios = ViewModel.Radios
+				.Where(r => selectedValues.Contains(r.IdStr))
+				.ToList();
+		}
+	}
+
+	<!--UPLOADPICKTEST Siirtää tämä EventManagerViewModel-->
+	private void SelectPicture(string pic)
+	{
+		ViewModel.Event.TitleImageUrl = pic;
+	}
+	private void LoadPictures()
+	{
+		var imagesPath = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "Events");
+		if (Directory.Exists(imagesPath))
+		{
+			var files = Directory.GetFiles(imagesPath)
+				.Select(f => Path.GetFileName(f))
+				.Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+				.ToList();
+
+			ViewModel.Pictures = files;
+		}
+		else
+		{
+			ViewModel.Pictures = new List<string>();
+		}
+	}
+
+	private string uploadedImageUrl;
+	private const int MaxImageSizeInBytes = 250 * 1024;
+	private async Task HandleImageSelected(InputFileChangeEventArgs e)
+	{
+		var file = e.File;
+		if (file.Size > MaxImageSizeInBytes)
+		{
+			return;
+		}
+		if (Path.GetExtension(file.Name).ToLower() != ".jpg")
+		{
+			return;
+		}
+		var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.Name);
+		var uploadPath = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "Events");
+		Directory.CreateDirectory(uploadPath);
+		var filePath = Path.Combine(uploadPath, uniqueFileName);
+		using (var fileStream = new FileStream(filePath, FileMode.Create))
+		{
+			await file.OpenReadStream().CopyToAsync(fileStream);
+		}
+		uploadedImageUrl = uniqueFileName;
+		ViewModel.Event.TitleImageUrl = uniqueFileName;
+		StateHasChanged();
+	}
+
+	private void DeleteTitlePicture()
+	{
+		ViewModel.Event.TitleImageUrl = "";
+
+		try
+		{
+			if (!string.IsNullOrEmpty(uploadedImageUrl))
+			{
+				var uploadFolder = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "Events");
+				var fullPath = Path.Combine(uploadFolder, uploadedImageUrl);
+
+				if (File.Exists(fullPath))
+				{
+					File.Delete(fullPath);
+				}
+
+				uploadedImageUrl = "";
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error deleting picture: {ex.Message}");
+		}
+	}
+
+
+	private async Task HandleModsSelected(InputFileChangeEventArgs e)
+	{
+		var file = e.File;
+
+		if (file.Size > MaxImageSizeInBytes)
+		{
+			return;
+		}
+		if (Path.GetExtension(file.Name).ToLower() != ".html")
+		{
+			return;
+		}
+		var originalName = Path.GetFileNameWithoutExtension(file.Name);
+		var dateSuffix = DateTime.Now.ToString("ddMMyy");
+		var newFileName = $"{originalName}-{dateSuffix}.html";
+		var uploadPath = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "ModLists");
+		Directory.CreateDirectory(uploadPath);
+		var filePath = Path.Combine(uploadPath, newFileName);
+		using (var fileStream = new FileStream(filePath, FileMode.Create))
+		{
+			await file.OpenReadStream().CopyToAsync(fileStream);
+		}
+		ViewModel.Event.ModPreset = newFileName;
+		StateHasChanged();
+	}
+
+
+}

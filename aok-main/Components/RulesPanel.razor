@@ -1,0 +1,195 @@
+﻿@using AOK.Models
+@using AOK.Models.Services
+@using MongoDB.Bson
+@using AOK.ViewModels
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Säännöt</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Sääntöjen hallinta</h3>
+	</div>
+</div>
+
+@if (ViewModel.Rules == null)
+{
+	<p class="aok-nav-text-normal aok-no-content">Ladataan sääntöjä...</p>
+}
+else
+{
+	<div class="event-rules-container">
+		<div class="event-rules-content">
+			@if (ViewModel.Rules.Count > 0)
+			{
+				<table class="event-rules-panel">
+					<thead>
+						<tr>
+							<th>Otsikko</th>
+							<th>Kuvaus</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var rule in ViewModel.Rules)
+						{
+							if (!string.IsNullOrWhiteSpace(rule.Title))
+							{
+								<tr style="cursor: pointer;" @onclick="() => OpenEditRuleModal(rule)">
+								
+									<td>@rule.Title</td>
+									<td class="event-rules-description">
+										@rule.Description
+									</td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			}
+			else
+			{
+				<p class="aok-nav-text-normal aok-no-content">Sääntöjä ei löytynyt.</p>
+			}
+
+			<div class="event-panel-create-cont-left">
+				<button class="event-btn-create" @onclick="OpenRuleModal">+ Luo sääntö</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Modal for creating new rule -->
+	<div class="modal fade @(IsRuleModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Luo uusi sääntö</h5>
+					<button type="button" class="btn-close" @onclick="CloseRuleModal"></button>
+				</div>
+				<div class="modal-body">
+					<EditForm Model="NewRule" OnValidSubmit="CreateRule">
+						<DataAnnotationsValidator />
+						<ValidationSummary />
+						<div class="mb-3">
+							<label for="rule-title">Otsikko</label>
+							<InputText id="rule-title" class="form-control" @bind-Value="NewRule.Title" />
+						</div>
+						<div class="mb-3">
+							<label for="rule-desc">Kuvaus</label>
+							<InputTextArea id="rule-desc" class="form-control" @bind-Value="NewRule.Description" />
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="event-btn-cancel" @onclick="CloseRuleModal">Peruuta</button>
+							<button type="submit" class="event-btn-create">Lisää</button>
+						</div>
+					</EditForm>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	@if (IsEditRuleModalOpen && SelectedRule != null)
+	{
+		<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Muokkaa sääntöä: @SelectedRule?.Title</h5>
+						<button type="button" class="btn-close" @onclick="CloseEditRuleModal"></button>
+					</div>
+					<div class="modal-body">
+						<EditForm Model="SelectedRule" OnValidSubmit="SaveEditedRule">
+							<DataAnnotationsValidator />
+							<ValidationSummary />
+							<div class="mb-3">
+								<label for="edit-rule-title">Otsikko</label>
+								<InputText id="edit-rule-title" class="form-control" @bind-Value="SelectedRule.Title" />
+							</div>
+							<div class="mb-3">
+								<label for="edit-rule-desc">Kuvaus</label>
+								<InputTextArea id="edit-rule-desc" class="form-control" @bind-Value="SelectedRule.Description" />
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="event-btn-cancel" @onclick="CloseEditRuleModal">Peruuta</button>
+								<button type="button" class="event-btn-delete" @onclick="() => RemoveRule(SelectedRule.IdStr)">Poista</button>
+								<button type="submit" class="event-btn-create">Tallenna</button>
+							</div>
+						</EditForm>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+@code {
+	[Parameter]
+	public EventManagerViewModel ViewModel { get; set; }
+
+	private bool IsRuleModalOpen = false;
+	private Rule NewRule { get; set; } = new();
+	private Rule? SelectedRule { get; set; }
+	private bool IsEditRuleModalOpen = false;
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		var rulesFromDb = await DB_Services.GetAllAsync<Rule>();
+		ViewModel.Rules = rulesFromDb;
+	}
+
+	private void OpenRuleModal()
+	{
+		IsRuleModalOpen = true;
+		NewRule = new Rule(); // fresh object
+	}
+
+	private void CloseRuleModal()
+	{
+		IsRuleModalOpen = false;
+	}
+
+	private async Task CreateRule()
+	{
+		if (!string.IsNullOrWhiteSpace(NewRule.Title) || !string.IsNullOrWhiteSpace(NewRule.Description))
+		{
+			NewRule._id = ObjectId.GenerateNewId();
+			DB_Services.Save(NewRule);
+
+			// Reload
+			var updated = await DB_Services.GetAllAsync<Rule>();
+			ViewModel.Rules = updated;
+
+			NewRule = new Rule();
+			CloseRuleModal();
+		}
+	}
+
+	private async Task RemoveRule(string ruleId)
+	{
+		var toDelete = ViewModel.Rules.FirstOrDefault(r => r.IdStr == ruleId);
+		if (toDelete != null)
+		{
+			DB_Services.Delete<Rule>(toDelete._id);
+			ViewModel.Rules.Remove(toDelete);
+		}
+	}
+
+	private void OpenEditRuleModal(Rule rule)
+	{
+		SelectedRule = rule;
+		IsEditRuleModalOpen = true;
+	}
+
+	private void CloseEditRuleModal()
+	{
+		IsEditRuleModalOpen = false;
+		SelectedRule = null;
+	}
+	private async Task SaveEditedRule()
+	{
+		if (SelectedRule != null && (!string.IsNullOrWhiteSpace(SelectedRule.Title) || !string.IsNullOrWhiteSpace(SelectedRule.Description)))
+		{
+			SelectedRule.Save(); // assuming your Rule model has a Save() method like Community
+			ViewModel.Rules = await DB_Services.GetAllAsync<Rule>();
+			CloseEditRuleModal();
+		}
+	}
+}

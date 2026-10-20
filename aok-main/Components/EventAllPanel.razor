@@ -1,0 +1,195 @@
+﻿@using AOK.Models.Services
+@using AOK.Models
+@using AOK.ViewModels
+@using MongoDB.Bson;
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Tapahtumat</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Kaikki tapahtumat</h3>
+	</div>
+</div>
+
+<div class="event-all-container aok-nav-text-normal">
+	<div class="event-all-cont">
+		<label for="ea-startDate">Suodata alkaen:</label>
+		<input type="date" id="ea-startDate" class="form-control" @bind="StartDate" />
+	</div>
+	<div class="event-all-cont">
+		<label for="ea-endDate">Päättyen:</label>
+		<input type="date" id="ea-endDate" class="form-control" @bind="EndDate" />
+	</div>
+	<div class="event-all-cont">
+		<label for="ea-community">Yhteisö:</label>
+		<select id="ea-community" class="form-control" @bind="SelectedCommunity">
+			<option value="">Kaikki</option>
+			@foreach (var community in ViewModel.Communities)
+			{
+				<option value="@community">@community</option>
+			}
+		</select>
+	</div>
+</div>
+
+@if (FilteredEvents == null)
+{
+	<div class="event-show-no-content">
+		<p class="aok-nav-text-normal aok-no-content">Ladataan tapahtumia...</p>
+	</div>
+}
+else if (FilteredEvents.Count == 0)
+{
+	<div class="event-show-no-content">
+		<p class="aok-nav-text-normal">Tapahtumia ei löytynyt.</p>
+	</div>
+}
+else
+{
+	<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+		@foreach (var ev in FilteredEvents)
+		{
+			<div class="col">
+				<div class="card h-100 shadow rounded-4 border-0 overflow-hidden">
+					<div class="position-relative">
+						@if (!string.IsNullOrWhiteSpace(ev.TitleImageUrl))
+						{
+							<img src="@($"/File/FetchFile?subFolder=Events&target={ev.TitleImageUrl}")" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+						else if (!string.IsNullOrWhiteSpace(ev.Game.TitleImageUrl))
+						{
+							<img src="@($"/File/FetchFile?subFolder=Games&target={ev.Game.TitleImageUrl}")" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+						else
+						{
+							<img src="/images/placeholder.png" class="card-img-top" style="height: 200px; object-fit: cover;" />
+						}
+
+						<div class="position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-50 text-white p-2">
+							<div class="d-flex justify-content-between small">
+								<span>@ev.Community.Name</span>
+								<span>@ev.StartDate.ToString("dd.MM.yy")</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="card-body">
+						<h5 class="card-title fw-semibold">@ev.Title</h5>
+						<p class="card-text text-muted">
+							@((ev.Description?.Length > 80) ? ev.Description.Substring(0, 80) + "..." : ev.Description)
+						</p>
+					</div>
+
+					@if (IsAuthenticated)
+					{
+						<div class="card-footer bg-white border-0 d-flex justify-content-end">
+							<button class="btn btn-outline-primary btn-sm rounded-pill px-3" @onclick="() => ShowEvent(ev.IdStr)">
+								Näytä
+							</button>
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</div>
+}
+
+@code {
+	[Parameter]
+	public EventViewModel ViewModel { get; set; }
+	[Parameter]
+	public bool IsAuthenticated { get; set; }
+	private List<Event> FilteredEvents { get; set; }
+
+	private string _selectedCommunity;
+	private string SelectedCommunity
+	{
+		get => _selectedCommunity;
+		set
+		{
+			if (_selectedCommunity != value)
+			{
+				_selectedCommunity = value;
+				ApplyFilters();
+				StateHasChanged();
+			}
+		}
+	}
+
+	private DateTime? _startDate;	
+	private DateTime? StartDate
+	{
+		get => _startDate;
+		set
+		{
+			if (value.HasValue && EndDate.HasValue && value.Value > EndDate.Value)
+			{
+				_startDate = EndDate;
+			}
+			else
+			{
+				_startDate = value;
+			}
+			ApplyFilters();
+			StateHasChanged();
+		}
+	}
+	private DateTime? _endDate;
+	private DateTime? EndDate
+	{
+		get => _endDate;
+		set
+		{
+			if (value.HasValue && StartDate.HasValue && value.Value < StartDate.Value)
+			{
+				_endDate = StartDate;
+			}
+			else
+			{
+				_endDate = value;
+			}
+			ApplyFilters();
+			StateHasChanged();
+		}
+	}
+
+
+	protected override async Task OnInitializedAsync()
+	{		
+		ViewModel.AllEvents = await DB_Services.GetAllAsync<Event>();
+		ViewModel.Communities = DB_Services.GetAll<Community>().Select(c => c.Name).ToList();
+		FilteredEvents = ViewModel.AllEvents;
+		StartDate = DateTime.Now.Date;
+		EndDate = DateTime.Now.AddMonths(6).Date;
+
+	}
+
+	private void ApplyFilters()
+	{
+		var filteredEvents = ViewModel.AllEvents.AsQueryable();
+
+		if (StartDate.HasValue)
+		{
+			filteredEvents = filteredEvents.Where(ev => ev.StartDate >= StartDate);
+		}
+
+		if (EndDate.HasValue)
+		{
+			filteredEvents = filteredEvents.Where(ev => ev.EndDate <= EndDate);
+		}
+
+		if (!string.IsNullOrEmpty(SelectedCommunity))
+		{
+			filteredEvents = filteredEvents.Where(ev => ev.Community.Name  == SelectedCommunity);			
+		}
+		FilteredEvents = filteredEvents.ToList(); // Apply all filters
+	}
+
+	private void ShowEvent(string eventId)
+	{
+		Navigation.NavigateTo("/Events/Show?id=" + eventId, true);
+	}
+
+}

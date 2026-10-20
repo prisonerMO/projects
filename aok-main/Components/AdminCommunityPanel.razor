@@ -1,0 +1,213 @@
+﻿@using AOK.Models
+@using AOK.Models.Services
+@using MongoDB.Bson
+@using AOK.ViewModels
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Yhteisöt</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Yhteisöjen hallinta</h3>
+	</div>
+</div>
+@if (ViewModel.Communities == null)
+{
+	<p class="aok-nav-text-normal aok-no-content">Ladataan yhteisöjä...</p>
+}
+else
+{
+	<div class="admin-panel-container">
+
+		<div class="admin-panel-content">
+			@if (ViewModel.Communities != null && ViewModel.Communities.Count > 0)
+			{
+				<table class="table-admin-com">
+					<thead>
+						<tr>
+							<th>Nimi</th>
+							<th>Kuvaus</th>
+							<th>
+								<span class="desktop-text">Käyttäjät</span>
+								<span class="mobile-text">K.</span>
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var community in ViewModel.Communities)
+						{
+								<tr style="cursor: pointer;" @onclick="() => OpenEditModal(community)">
+									<td>@community.Name</td>
+									<td>@community.Description</td>
+									<td>@(CommunityUserCounts.ContainsKey(community.IdStr) ? CommunityUserCounts[community.IdStr] : 0)</td>
+								</tr>
+						}
+					</tbody>
+				</table>
+			}
+			else
+			{
+				<p class="aok-nav-text-normal aok-no-content">Yhteisöjä ei löytynyt.</p>
+			}
+			<div class="admin-panel-buttons">
+				<button class="event-btn-create" @onclick="OpenCommunityModal">+ Luo yhteisö</button>
+			</div>
+		</div>
+	</div>
+
+
+	<div class="modal fade @(IsCommunityModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">Luo uusi yhteisö</h5>
+					<button type="button" class="btn-close" @onclick="CloseCommunityModal"></button>
+				</div>
+				<div class="modal-body">
+					<EditForm Model="NewCommunity" OnValidSubmit="CreateCommunity">
+						<DataAnnotationsValidator />
+						<ValidationSummary />
+						<div>
+							<label for="com-name">Nimi</label>
+							<InputText id="com-name" class="form-control" @bind-Value="NewCommunity.Name" />
+						</div>
+						<div>
+							<label for="com-ip">Kuvaus</label>
+							<InputText id="com-ip" class="form-control" @bind-Value="NewCommunity.Description" />
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="event-btn-cancel" @onclick="CloseCommunityModal">Peruuta</button>
+							<button type="submit" class="event-btn-create">+ Luo</button>
+						</div>
+					</EditForm>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	@if (IsEditModalOpen && SelectedCommunity != null)
+	{
+		<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.5);">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Muokkaa TS serveriä: @SelectedCommunity?.Name</h5>
+						<button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+					</div>
+					<div class="modal-body">
+						<div class="mb-3">
+							<label for="edit-name">Nimi</label>
+							<InputText id="edit-com-name" class="form-control" @bind-Value="SelectedCommunity.Name" />
+						</div>
+						<div class="mb-3">
+							<label for="edit-ip">Kuvaus</label>
+							<InputText id="edit-com-ip" class="form-control" @bind-Value="SelectedCommunity.Description" />
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button class="event-btn-cancel" @onclick="CloseEditModal">Peruuta</button>
+						<button class="event-btn-delete" @onclick="DeleteCommunity">Poista</button>
+						<button class="event-btn-create" @onclick="SaveEditedCommunity">Tallenna muutokset</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+@code {
+	[Parameter]
+	public AdminViewModel ViewModel { get; set; }
+	private Community NewCommunity { get; set; } = new();
+	private bool IsCommunityModalOpen = false;
+	private bool IsEditModalOpen = false;
+	private Community? SelectedCommunity = null;
+	private Dictionary<string, int> CommunityUserCounts = new();
+
+	protected override async Task OnInitializedAsync()
+	{
+		ViewModel.Communities = await DB_Services.GetAllAsync<Community>();
+
+		var allUsers = await DB_Services.GetAllAsync<User>();
+
+		foreach (var community in ViewModel.Communities)
+		{
+			if (ObjectId.TryParse(community.IdStr, out var communityId))
+			{
+				int count = allUsers.Count(u => u.Community == communityId);
+				CommunityUserCounts[community.IdStr] = count;
+			}
+			else
+			{
+				CommunityUserCounts[community.IdStr] = 0;
+			}
+		}
+	}
+
+
+
+
+	private void CreateCommunity()
+	{
+		if (!string.IsNullOrWhiteSpace(NewCommunity.Name))
+		{
+			NewCommunity._id = ObjectId.GenerateNewId();
+			DB_Services.Save(NewCommunity);
+			ViewModel.Communities = DB_Services.GetAll<Community>();
+			NewCommunity = new Community();
+			StateHasChanged();
+			CloseCommunityModal();
+		}
+		else
+		{
+			Console.WriteLine("");
+		}
+	}
+
+	private void OpenCommunityModal()
+	{
+		IsCommunityModalOpen = true;
+	}
+
+	private void CloseCommunityModal()
+	{
+		IsCommunityModalOpen = false;
+	}
+
+	private async Task SaveEditedCommunity()
+	{
+		if (!string.IsNullOrWhiteSpace(SelectedCommunity.Name))
+		{
+			SelectedCommunity.Save();
+			ViewModel.Communities = await DB_Services.GetAllAsync<Community>();
+			StateHasChanged();
+			CloseEditModal();
+		}
+	}
+
+	private async Task DeleteCommunity()
+	{
+		if (SelectedCommunity != null)
+		{
+			DB_Services.Delete<Community>(SelectedCommunity._id);
+			ViewModel.Communities = await DB_Services.GetAllAsync<Community>();
+			StateHasChanged();
+			CloseEditModal();
+		}
+	}
+
+
+	private void OpenEditModal(Community community)
+	{
+		SelectedCommunity = community;
+		IsEditModalOpen = true;
+	}
+
+	private void CloseEditModal()
+	{
+		IsEditModalOpen = false;
+		SelectedCommunity = null;
+	}
+}

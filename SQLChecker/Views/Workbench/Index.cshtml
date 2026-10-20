@@ -1,0 +1,93 @@
+﻿@model SQLChecker.ViewModels.WorkbenchViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Workbench - " + Model.Course.CourseName;
+}
+
+<div class="wb-layout">
+    <aside class="wb-sidebar">
+        <div class="wb-sidebar-header">@Model.Course.CourseName.ToUpper()</div>
+        <div class="wb-sidebar-scroll">
+            @foreach (var assignment in Model.Assignments)
+            {
+                <div class="wb-week-group">
+                    <div class="wb-week-label" onclick="toggleWeek(this)">
+                        @assignment.Name
+                        <span class="wb-chevron">▸</span>
+                    </div>
+                    <div class="wb-task-list">
+                        @foreach (var task in assignment.Tasks ?? new())
+                        {
+                            <div class="wb-task-item"
+                                 onclick="selectTask(this, '@task.Name', '@task.Description', '@task.IdStr')">
+                                <span class="wb-task-dot"></span>
+                                @task.Name
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </aside>
+    <main class="wb-main">
+        <div class="wb-task-header">
+            <div class="wb-task-header-top">
+                <span class="wb-task-title" id="task-title">Valitse tehtävä</span>
+                <span class="wb-task-badge" id="task-badge"></span>
+            </div>
+            <div class="wb-task-desc" id="task-desc"></div>
+        </div>
+
+        <div class="wb-editor-area">
+            <div class="wb-editor-toolbar">
+                <span class="wb-label">SQL EDITOR</span>
+                <div class="wb-editor-actions">
+                    <button class="btn-wb-clear" onclick="clearEditor()">Tyhjennä</button>
+                    <button class="btn-wb-run" onclick="runQuery()">▶ Aja kysely</button>
+                </div>
+            </div>
+            <textarea id="sql-editor"
+                      class="wb-editor-body"
+                      placeholder="Kirjoita SQL-kysely tähän..."></textarea>
+            <input type="hidden" id="task-id" value="" />
+            <input type="hidden" id="database-name" value="@Model.SelectedDatabase" />
+        </div>
+
+        <div id="resize-handle"></div> 
+
+        <div class="wb-results-area">
+            <div class="wb-results-bar">
+                <span class="wb-label">TULOKSET</span>
+                <span class="wb-results-meta" id="results-meta"></span>
+            </div>
+            <div id="results-container" class="wb-results-body">
+                <div class="wb-results-empty">Aja kysely nähdäksesi tulokset</div>
+            </div>
+        </div>
+    </main>
+    <aside class="wb-right-panel">
+        <div class="wb-rp-section">
+            <div class="wb-rp-title">TIETOKANTATAULUT</div>
+            @foreach (var table in Model.DbSchema)
+            {
+                <div class="wb-db-table">
+                    <div class="wb-db-table-name" onclick="toggleSchema(this)">
+                        @table.Key <span>▸</span>
+                    </div>
+                    <div class="wb-db-cols" style="display:none">
+                        @string.Join(" · ", table.Value)
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="wb-hint-section" id="hint-section" style="display:none">
+            <div class="wb-rp-title">VIHJE</div>
+            <div class="wb-hint-box" id="hint-box"></div>
+        </div>
+    </aside>
+
+</div>
+
+@section Scripts {
+    <script src="~/js/workbench.js"></script>
+}

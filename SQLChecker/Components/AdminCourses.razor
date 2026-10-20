@@ -1,0 +1,319 @@
+﻿@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@using SQLChecker.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@using Microsoft.AspNetCore.Components.Web
+@using SQLChecker.Services
+@inject ICourseService CourseService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>SQLChecker - Kurssit</PageTitle>
+
+<div class="panel-header-container">
+    <div class="panel-headers">
+        <h3>Kurssien hallinta</h3>
+    </div>
+</div>
+
+<div class="panel-create-container">
+    <button class="btn-create" @onclick="OpenCreateModal">+ Luo Kurssi</button>
+</div>
+
+@if (ViewModel.Courses == null || !ViewModel.Courses.Any())
+{
+    <p class="nav-text-normal no-content">Ladataan kursseja...</p>
+}
+else
+{
+    <div class="table-container">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Kurssi ID</th>
+                    <th>Kurssin nimi</th>
+                    <th>Tehtävä kokonaisuudet</th>
+                    <th>Toiminnot</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var course in ViewModel.Courses)
+                {
+                    <tr>
+                        <td class="admin-id-cell">@course.CourseIdStr</td>
+                        <td class="admin-name-cell" @onclick="@(() => ShowCourseData(course))">
+                            @course.CourseName
+                        </td>
+                        <td class="admin-tasks-cell">
+                            <span class="assignment-badge">
+                                @(course.Assignments?.Count ?? 0) Kokonaisuuutta
+                            </span>
+                        </td>
+                        <td class="admin-actions-cell">
+                            <button class="btn-action btn-view" @onclick="@(() => ShowCourseData(course))">
+                                NÄYTÄ
+                            </button>
+
+                            <button class="btn-action btn-edit" @onclick="@(() => OpenEditModal(course))">
+                                MUOKKAA
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal for viewing course details -->
+<div class="modal fade @(ShowCourse ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Kurssin tiedot: @(SelectedCourse?.CourseName ?? "")</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+            </div>
+            @if (SelectedCourse != null)
+            {
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="course-id">Kurssi ID (numero)</label>
+                        <input id="course-id" class="form-control" value="@SelectedCourse.CourseId" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="course-id-str">Kurssi ID (merkkijono)</label>
+                        <input id="course-id-str" class="form-control" value="@SelectedCourse.CourseIdStr" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="course-name">Kurssin nimi</label>
+                        <input id="course-name" class="form-control" value="@SelectedCourse.CourseName" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="course-assignments">Tehtävät (@(SelectedCourse.Assignments?.Count ?? 0))</label>
+                        @if (SelectedCourse.Assignments != null && SelectedCourse.Assignments.Any())
+                        {
+                            <div class="assignments-list">
+                                @foreach (var assignment in SelectedCourse.Assignments)
+                                {
+                                    <div class="assignment-item">
+                                        @assignment.Name
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Ei tehtäviä</p>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="event-btn-cancel" @onclick="CloseModal">Sulje</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for creating new course -->
+<div class="modal fade @(IsCreateModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Luo uusi kurssi</h5>
+                <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="NewCourse" OnValidSubmit="CreateCourse">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(CreateCourseError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @CreateCourseError
+                        </div>
+                    }
+        
+                    <div class="mb-3">
+                        <label for="new-course-id">Kurssi ID (numero)</label>
+                        <InputNumber id="new-course-id" class="form-control" @bind-Value="NewCourse.CourseId" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-course-id-str">Kurssi ID (merkkijono)</label>
+                        <InputText id="new-course-id-str" class="form-control" @bind-Value="NewCourse.CourseIdStr" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-course-name">Kurssin nimi</label>
+                        <InputText id="new-course-name" class="form-control" @bind-Value="NewCourse.CourseName" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseCreateModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Lisää</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for editing course -->
+<div class="modal fade @(IsEditModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Muokkaa kurssia</h5>
+                <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+            </div>
+            <div class="modal-body">
+                @if (EditingCourse != null)
+                {
+                <EditForm Model="EditingCourse" OnValidSubmit="UpdateCourse">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(EditCourseError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @EditCourseError
+                        </div>
+                    }
+        
+                    <div class="mb-3">
+                        <label for="edit-course-id">Kurssi ID (numero)</label>
+                        <InputNumber id="edit-course-id" class="form-control" @bind-Value="EditingCourse.CourseId" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-course-id-str">Kurssi ID (merkkijono)</label>
+                        <InputText id="edit-course-id-str" class="form-control" @bind-Value="EditingCourse.CourseIdStr" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-course-name">Kurssin nimi</label>
+                        <InputText id="edit-course-name" class="form-control" @bind-Value="EditingCourse.CourseName" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseEditModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Tallenna</button>
+                    </div>
+                        
+                    </EditForm>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public AdminViewModel ViewModel { get; set; }
+
+    private bool ShowCourse { get; set; } = false;
+    private Course? SelectedCourse { get; set; } = null;
+
+    private string? CreateCourseError { get; set; } = null;
+    private bool IsCreateModalOpen = false;
+    private Course NewCourse { get; set; } = new() { Assignments = new List<Assignment>() };
+
+    private string? EditCourseError { get; set; } = null;
+    private bool IsEditModalOpen = false;
+    private Course? EditingCourse { get; set; } = null;
+
+    private void ShowCourseData(Course course)
+    {
+        Console.WriteLine($"Showing course data for: {course.CourseName}");
+        SelectedCourse = course;
+        ShowCourse = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowCourse = false;
+        SelectedCourse = null;
+    }
+
+    private void OpenCreateModal()
+    {
+        Console.WriteLine($"BUTTON PRESSED - IsCreateModalOpen: {IsCreateModalOpen}");
+        IsCreateModalOpen = true;
+        NewCourse = new Course { Assignments = new List<Assignment>() };
+    }
+
+    private void CloseCreateModal()
+    {
+        IsCreateModalOpen = false;
+        CreateCourseError = null;
+        NewCourse = new Course { Assignments = new List<Assignment>() };
+    }
+
+    private void OpenEditModal(Course course)
+    {
+        Console.WriteLine($"Editing course _id: {course._id}");
+        EditingCourse = new Course
+        {
+            _id = course._id,
+            CourseId = course.CourseId,
+            CourseIdStr = course.CourseIdStr,
+            CourseName = course.CourseName,
+            Assignments = course.Assignments ?? new List<Assignment>()
+        };
+        IsEditModalOpen = true;
+        Console.WriteLine($"EditingCourse _id: {EditingCourse._id}");
+    }
+
+
+    private void CloseEditModal()
+    {
+        IsEditModalOpen = false;
+        EditCourseError = null;
+        EditingCourse = null;
+    }
+
+    private async Task CreateCourse()
+    {
+        CreateCourseError = null;
+
+        if (string.IsNullOrWhiteSpace(NewCourse.CourseIdStr) || string.IsNullOrWhiteSpace(NewCourse.CourseName))
+        {
+            CreateCourseError = "Kurssi ID ja nimi ovat pakollisia.";
+            return;
+        }
+
+        try
+        {
+            var createdCourse = await CourseService.CreateCourseAsync(NewCourse);
+            ViewModel.Courses = await CourseService.GetAllCoursesAsync();
+
+            NewCourse = new Course { Assignments = new List<Assignment>() };
+            CloseCreateModal();
+        }
+        catch (Exception ex)
+        {
+            CreateCourseError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task UpdateCourse()
+    {
+        EditCourseError = null;
+
+        if (string.IsNullOrWhiteSpace(EditingCourse.CourseIdStr) || string.IsNullOrWhiteSpace(EditingCourse.CourseName))
+        {
+            EditCourseError = "Kurssi ID ja nimi ovat pakollisia.";
+            return;
+        }
+
+        try
+        {
+            await CourseService.UpdateCourseAsync(EditingCourse);
+            ViewModel.Courses = await CourseService.GetAllCoursesAsync();
+            CloseEditModal();
+        }
+        catch (Exception ex)
+        {
+            EditCourseError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+}

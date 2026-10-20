@@ -1,0 +1,467 @@
+﻿@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@using SQLChecker.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@using Microsoft.AspNetCore.Components.Web
+@using SQLChecker.Services
+@inject IUserService UserService
+@inject ICourseService CourseService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>SQLChecker - Käyttäjät</PageTitle>
+
+<div class="panel-header-container ">
+    <div class="panel-headers">
+        <h3>Käyttäjäroolien hallinta</h3>
+    </div>
+</div>
+<div class="panel-create-container admin-user-create-container">
+    <div class="admin-user-import">    
+        <select class="form-control"
+                @bind="ImportCourseId"
+                style="max-width:200px;">
+            <option value="">-- Valitse kurssi --</option>
+            @foreach (var course in AvailableCourses)
+            {
+                <option value="@course.CourseIdStr">@course.CourseName</option>
+            }
+        </select>
+
+        <label class="btn-import @(string.IsNullOrWhiteSpace(ImportCourseId) ? "disabled" : "")"
+               style="cursor:pointer; margin:0;">
+            📂 Lisää käyttäjät (.xlsx)
+
+            <InputFile OnChange="HandleExcelUpload"
+                       accept=".xlsx"
+                       disabled="@string.IsNullOrWhiteSpace(ImportCourseId)"
+                       style="display:none;" />
+        </label>
+        
+        <div class="admin-user-or"><p>Tai</p></div>
+        <button class="btn-create" @onclick="OpenCreateModal">+ Luo käyttäjät</button>
+    </div>
+</div>
+@if (ViewModel.Users == null || !ViewModel.Users.Any())
+{
+    <p class="nav-text-normal no-content">Ladataan käyttäjiä...</p>
+}
+else
+{
+    <div class="admin-table-container">
+        <table class="admin-users-table">
+            <thead>
+                <tr>
+                    <th>Käyttäjätunnus</th>
+                    <th>Kurssi</th>
+                    <th>Roolit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in ViewModel.Users)
+                {
+                    <tr>
+                        <td class="username-cell" @onclick="@(() => ShowUserData(u))">
+                            @GetLast8CharsFormatted(u.Username)
+                        </td>
+                        <td class="admin-username-cell">@u.CourseId</td>
+                        <td class="admin-roles-cell">
+                            <div class="admin-roles-container">
+                                @foreach (var role in AllRoles)
+                                {
+                                    <label class="admin-role-checkbox">
+                                        <input type="checkbox"
+                                               id="@($"{u.Username}_{role}")"
+                                               checked="@u.Roles.Contains(role)"
+                                               @onchange="(e => OnRoleChanged(u, role, e))" />
+                                        <span class="admin-role-label">@role</span>
+                                    </label>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+@if (ImportErrors.Any())
+{
+    <div class="alert alert-danger" style="margin-top:8px">
+        @foreach (var err in ImportErrors)
+        {
+            <div>@err</div>
+        }
+    </div>
+}
+
+@if (PreviewUsers.Any())
+{
+    <div class="admin-table-container" style="margin-top:12px">
+        <div style="padding:8px; display:flex; justify-content:space-between;">
+            <span>Esikatselu — @PreviewUsers.Count käyttäjää</span>
+
+            <div style="display:flex; gap:6px;">
+                <button class="btn-action btn-view" @onclick="CancelImport">Peruuta</button>
+                <button class="btn-action btn-edit" @onclick="ConfirmImport">
+                    ✓ Tuo kaikki
+                </button>
+            </div>
+        </div>
+
+        <table class="admin-users-table">
+            <thead>
+                <tr>
+                    <th>Käyttäjätunnus</th>
+                    <th>Kurssi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in PreviewUsers)
+                {
+                    <tr>
+                        <td>@u.Username</td>
+                        <td>@u.CourseId</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<div class="modal fade @(ShowUser ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Käyttäjän tiedot: @(SelectedUser != null ? GetLast8CharsFormatted(SelectedUser.Username) : "")</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+            </div>
+            @if (SelectedUser != null)
+            {
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="au-username">Käyttäjätunnus</label>
+                        <input id="au-username" class="form-control" value="@SelectedUser.Username" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="au-id">ID</label>
+                        <input id="au-id" class="form-control" value="@SelectedUser.UsernameN" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="au-course">Kurssi</label>
+                        <input id="au-course" class="form-control" value="@SelectedUser.CourseId" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="au-createdat">Luotu</label>
+                        <input id="au-createdat" class="form-control" value="@SelectedUser.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy :: HH:mm:ss")" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="au-lastlogin">Viimeisin kirjautuminen</label>
+                        <input id="au-lastlogin" class="form-control" value="@SelectedUser.LastLogin.ToLocalTime().ToString("dd.MM.yyyy :: HH:mm:ss")" readonly />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="event-btn-cancel" @onclick="CloseModal">Sulje</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for creating new user -->
+<div class="modal fade @(IsCreateModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Luo uusi käyttäjä</h5>
+                <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="NewUser" OnValidSubmit="CreateUser">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(CreateUserError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @CreateUserError
+                        </div>
+                    }
+        
+                    <div class="mb-3">
+                        <label for="user-username">Käyttäjätunnus</label>
+                        <InputText id="user-username" class="form-control" @bind-Value="NewUser.Username" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="user-description">Kurssi</label>
+                        <InputText id="user-description" class="form-control" @bind-Value="NewUser.CourseId" />
+                    </div>
+                    <div class="admin-roles-container">
+                        @foreach (var role in AllRoles)
+                        {
+                            <div class="form-check form-check-inline admin-roles">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       id="@($"{NewUser.Username}_{role}")"
+                                       checked="@NewUser.Roles.Contains(role)"
+                                       @onchange="(e => OnNewUserRoleChanged(role, e))" />
+                                <label class="form-check-label" for="@($"{NewUser.Username}_{role}")">@role</label>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseCreateModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Lisää</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public AdminViewModel ViewModel { get; set; }
+
+    private List<string> AllRoles = new() { "Admin", "PowerUser", "Active", "Student" };
+    private bool ShowUser { get; set; } = false;
+    private User? SelectedUser { get; set; } = null;
+
+    private string? CreateUserError { get; set; } = null;
+    private bool IsCreateModalOpen = false;
+    private User NewUser { get; set; } = new();
+
+    private List<ImportedUserDto> PreviewUsers = new();
+    private List<string> ImportErrors = new();
+    private string? ImportSuccess = null;
+    private bool isImporting = false;
+
+    private List<Course> AvailableCourses = new();
+    private string ImportCourseId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        AvailableCourses = await CourseService.GetAllCoursesAsync();
+    }
+
+    private async Task OnRoleChanged(User user, string role, ChangeEventArgs e)
+    {
+        try
+        {
+            var isChecked = (bool)e.Value!;
+            var selectedUser = await UserService.GetUserByUsernameAsync(user.Username);
+            
+            if (selectedUser == null) return;
+
+            if (isChecked && !selectedUser.Roles.Contains(role))
+            {
+                selectedUser.Roles.Add(role);
+            }
+            else if (!isChecked)
+            {
+                selectedUser.Roles.Remove(role);
+            }
+            
+            await UserService.UpdateUserAsync(selectedUser);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating role: {ex.Message}");
+        }
+    }
+
+
+    private void ShowUserData(User user)
+    {
+        Console.WriteLine($"Showing user data for: {user.Username}");
+        SelectedUser = user;
+        ShowUser = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowUser = false;
+        SelectedUser = null;
+    }
+
+    private void OpenCreateModal()
+    {
+        Console.WriteLine($"BUTTON PRESSED - IsCreateModalOpen: {IsCreateModalOpen}");
+        IsCreateModalOpen = true;
+        NewUser = new User { Roles = new List<string>() };
+        Console.WriteLine($"NewUser Roles Count: {NewUser.Roles.Count}");
+    }
+
+    private void CloseCreateModal()
+    {
+        IsCreateModalOpen = false;
+        CreateUserError = null;
+        NewUser = new User { Roles = new List<string>() };
+    }
+
+    private async Task CreateUser()
+    {
+        CreateUserError = null;
+
+        if (string.IsNullOrWhiteSpace(NewUser.Username) || string.IsNullOrWhiteSpace(NewUser.CourseId))
+        {
+            CreateUserError = "Käyttäjätunnus ja kurssi ovat pakollisia.";
+            return;
+        }
+
+        try
+        {
+            
+            var createdUser = await UserService.CreateUserAsync(NewUser);
+            ViewModel.Users = await UserService.GetAllUsersAsync();
+
+            NewUser = new User { Roles = new List<string>() };
+            CloseCreateModal();
+        }
+        catch (Exception ex)
+        {
+            // Show user-friendly error from service
+            CreateUserError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private void OnNewUserRoleChanged(string role, ChangeEventArgs e)
+    {
+        bool isChecked = (bool)e.Value!;
+    
+        if (isChecked)
+        {
+            if (!NewUser.Roles.Contains(role))
+                NewUser.Roles.Add(role);
+        }
+        else
+        {
+            NewUser.Roles.Remove(role);
+        }
+        
+        StateHasChanged(); // Force UI update
+    }
+
+    private string GetLast8CharsFormatted(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Length > 8 ? "..." + value.Substring(value.Length - 8) : value;
+    }
+
+
+    private async Task ConfirmImport()
+    {
+        isImporting = true;
+        ImportErrors.Clear();
+
+        int success = 0;
+        int skipped = 0;
+
+        foreach (var u in PreviewUsers)
+        {
+            try
+            {
+                var existing = await UserService.GetUserByUsernameAsync(u.Username);
+                if (existing != null)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var newUser = new User
+                {
+                    Username = u.Username,
+                    CourseId = u.CourseId,
+                    Roles = new List<string> { "Active", "Student" },
+                    CreatedAt = DateTime.UtcNow,
+                    LastLogin = DateTime.UtcNow
+                };
+
+                await UserService.CreateUserAsync(newUser);
+                success++;
+            }
+            catch (Exception ex)
+            {
+                ImportErrors.Add($"{u.Username}: {ex.Message}");
+            }
+        }
+
+        ViewModel.Users = await UserService.GetAllUsersAsync();
+
+        PreviewUsers.Clear();
+        isImporting = false;
+
+        ImportSuccess = $"Tuotu {success} käyttäjää. Ohitettu {skipped}.";
+    }
+
+    private async Task HandleExcelUpload(InputFileChangeEventArgs e)
+    {
+        ImportErrors.Clear();
+        ImportSuccess = null;
+        PreviewUsers.Clear();
+
+        var file = e.File;
+        if (file == null) return;
+
+        if (string.IsNullOrWhiteSpace(ImportCourseId))
+        {
+            ImportErrors.Add("Anna kurssi ennen tuontia.");
+            return;
+        }
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+
+            using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            content.Add(new StreamContent(ms), "file", file.Name);
+            content.Add(new StringContent(ImportCourseId), "courseId");
+
+            using var http = new HttpClient();
+            var baseUrl = NavigationManager.BaseUri.TrimEnd('/');
+            var response = await http.PostAsync($"{baseUrl}/File/ImportUsers", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                ImportErrors.Add(await response.Content.ReadAsStringAsync());
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var users = System.Text.Json.JsonSerializer.Deserialize<List<ImportedUserDto>>(
+                json,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+            if (users == null || !users.Any())
+            {
+                ImportErrors.Add("Tiedostosta ei löytynyt käyttäjiä.");
+                return;
+            }
+
+            PreviewUsers = users;
+        }
+        catch (Exception ex)
+        {
+            ImportErrors.Add($"Virhe: {ex.Message}");
+        }
+    }
+
+    private void CancelImport()
+    {
+        PreviewUsers.Clear();
+        ImportErrors.Clear();
+        ImportSuccess = null;
+    }
+
+
+}

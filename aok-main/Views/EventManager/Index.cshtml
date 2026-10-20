@@ -1,0 +1,54 @@
+﻿@model AOK.ViewModels.EventManagerViewModel
+@{
+    ViewData["Title"] = "AOK - Tapahtumat";
+}
+<div class="scroll-wrapper">
+<div class="event-container">
+    <a asp-controller="EventManager" asp-action="All" class="btn @(Model.Type == 0 ? "event-mg-actived" : "event-mg-deactived")">
+        Näytä kaikki
+    </a>
+    <a asp-controller="EventManager" asp-action="Create" class="btn @(Model.Type == 1 ? "event-mg-actived" : "event-mg-deactived")">
+        Luo uusi tapahtuma
+    </a>
+    <a asp-controller="EventManager" asp-action="GameServers" class="btn @(Model.Type == 3 ? "event-mg-actived" : "event-mg-deactived")">
+        Peli serverit
+    </a>
+    <a asp-controller="EventManager" asp-action="TSServers" class="btn @(Model.Type == 4 ? "event-mg-actived" : "event-mg-deactived")">
+        TS serverit
+    </a>
+    <a asp-controller="EventManager" asp-action="Roles" class="btn @(Model.Type == 5 ? "event-mg-actived" : "event-mg-deactived")">
+        Roolit
+    </a>
+    <a asp-controller="EventManager" asp-action="Rules" class="btn @(Model.Type == 6 ? "event-mg-actived" : "event-mg-deactived")">
+        Säännöt
+    </a>
+</div>
+</div>
+@if (Model.Type == 0)
+{
+    <partial name="_AllPartial" model="Model" />
+}
+else if (Model.Type == 1)
+{
+    <component type="typeof(AOK.Components.EventCreatePanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 2)
+{
+    <component type="typeof(AOK.Components.EventModifyPanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 3)
+{
+    <component type="typeof(AOK.Components.GameServersPanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 4)
+{
+    <component type="typeof(AOK.Components.TSServersPanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 5)
+{
+    <component type="typeof(AOK.Components.EventRolePanel)" render-mode="Server" param-ViewModel="Model" />
+}
+else if (Model.Type == 6)
+{
+    <component type="typeof(AOK.Components.RulesPanel)" render-mode="Server" param-ViewModel="Model" />
+}

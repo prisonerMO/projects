@@ -1,0 +1,49 @@
+﻿@using Microsoft.AspNetCore.Components
+
+@{
+    ViewData["Title"] = "AOK - Kirjautuminen";
+    bool type = Model?.Register ?? false;
+}
+@model AOK.ViewModels.UserRegisterViewModel
+
+<div class="container text-center mb-2 mt-5 aok-nav-text-normal">
+    @if (User.Identity.IsAuthenticated)
+    {
+        <div id="partial-container" class="p-3 border rounded bg-light"></div>
+         
+    }
+    else
+    {
+        <div id="main-content" class="login-regist-container">
+            @if (type)
+            {
+                <partial name="../Login/_RegisterPartial" model="Model" />
+            }
+            else
+            {
+                <partial name="../Login/_LoginPartial" model="Model" />
+            }
+        </div>
+    }
+</div>
+@section Scripts {
+    <script>
+        $(document).on("click", ".login-tab", function () {
+            var target = $(this).data("target"); // Get button target
+            var url = target === "Login" ? "../Login/_LoginPartial" : "../Login/_RegisterPartial"; // Correct URL
+            console.log("TARGET: ", target);
+            console.log("URLT: ", url);
+            $.ajax({
+                type: 'GET',
+                url: url,
+                success: function (data) {
+                    $("#main-content").html(data);
+                    window.history.pushState({}, "", "/" + target.toLowerCase());
+                },
+                error: function () {
+                    alert('Failed to load content.');
+                }
+            });
+        });
+    </script>
+}

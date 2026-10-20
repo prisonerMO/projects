@@ -1,0 +1,293 @@
+﻿@using AOK.Models.Services
+@using AOK.Models
+@using AOK.ViewModels
+@using Microsoft.AspNetCore.Hosting
+@using MongoDB.Bson;
+@using MongoDB.Bson.Serialization.Attributes
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IWebHostEnvironment WebHostEnvironment
+@using Microsoft.AspNetCore.Components.Web
+<PageTitle>AOK - Pelit</PageTitle>
+
+<div class="event-panel-header-container ">
+	<div class="event-panel-headers">
+		<h3>Pelien hallinta</h3>
+	</div>
+</div>
+@if (ViewModel.Games == null)
+{
+	<p class="aok-nav-text-normal aok-no-content">Ladataan pelejä...</p>
+}
+else
+{
+	<div class="admin-panel-container">
+
+		<div class="admin-panel-content">
+			@if (ViewModel.Games.Count > 0)
+			{
+				<table class="table-admin-game">
+					<thead>
+						<tr>
+							<th>Nimi</th>
+							<th>Kuvaus</th>
+							<th>Linkki</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (var game in ViewModel.Games)
+						{
+							if (game.Name != "Tyhjä")
+							{
+								<tr style="cursor: pointer;" @onclick="() => OpenEditModal(game)">
+									<td>
+										@if (!string.IsNullOrEmpty(game.TitleImageUrl))
+										{
+											<img class="table-admin-game-image"src="@( $"File/FetchFile?subFolder=Games&target={game.TitleImageUrl}" )" alt="Game Image" style="object-fit:contain; max-width:50px; max-height:30px; margin-right:8px;" />
+
+										}
+										@game.Name
+									</td>
+									<td>@game.Description</td>
+									<td>@game.Link</td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			}
+			else
+			{
+
+				<div class="aok-no-content-medium">
+					<p class="aok-nav-text-normal">Pelejä ei löytynyt.</p>
+				</div>
+			}
+			<div class="admin-panel-buttons">
+				<button class="event-btn-create" @onclick="OpenGameModal">+ Luo peli</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade @(IsGameModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title">@((IsEditMode ? "Muokkaa peliä" : "Luo uusi peli"))</h5>
+					<button type="button" class="btn-close" @onclick="CloseGameModal"></button>
+				</div>
+				<div class="modal-body">
+					<EditForm Model="EditingGame" OnValidSubmit="HandleSubmit">
+						<DataAnnotationsValidator />
+						<ValidationSummary />
+						<div>
+							<label for="game-name">Nimi</label>
+							<InputText id="game-name" class="form-control" @bind-Value="EditingGame.Name" />
+						</div>
+						<div>
+							<label for="game-desc">Kuvaus</label>
+							<InputText id="game-desc" class="form-control" @bind-Value="EditingGame.Description" />
+						</div>
+						<div>
+							<label for="game-link">Linkki</label>
+							<InputText id="game-link" class="form-control" @bind-Value="EditingGame.Link" />
+						</div>
+						@if (string.IsNullOrEmpty(EditingGame.TitleImageUrl))
+						{
+							<label for="game-pic">Kuva</label>
+							<div class="choose-image-container">
+								<div class="choose-image-content">
+									<div class="dropdown">
+										<button class="event-btn-create dropdown-toggle" type="button" data-bs-toggle="dropdown">
+											Valitse listalta
+										</button>
+										<ul class="dropdown-menu">
+											@foreach (var pic in Pictures)
+											{
+												<li>
+													<a class="dropdown-item" @onclick="() => SelectPicture(pic)">
+														<img src="@($"File/FetchFile?subFolder=Games&target={pic}")" style="height: 50px;" />
+														@pic
+													</a>
+												</li>
+											}
+										</ul>
+									</div>
+								</div>
+								<div class="choose-image-or">
+									<p>Tai lataa uusi kuva</p>
+								</div>
+								<div class="choose-image-content">
+									<InputFile OnChange="HandleImageSelected" class="form-control" accept=".jpg" />
+								</div>
+							</div>
+						}
+						else
+						{
+							<div class="mb-3">
+								<img src="@($"File/FetchFile?subFolder=Games&target={EditingGame.TitleImageUrl}")" style="max-width: 200px;" />
+								<button class="event-btn-delete" @onclick="DeletePicture">Poista</button>
+							</div>
+						}
+						<div class="modal-footer">
+							<button type="button" class="event-btn-cancel" @onclick="CloseGameModal">Peruuta</button>
+							@if (IsEditMode)
+							{
+								<button type="button" class="event-btn-delete" @onclick="DeleteGame">Poista</button>
+								<button type="submit" class="event-btn-create">Tallenna</button>
+							}
+							else
+							{
+								<button type="submit" class="event-btn-create">+ Luo</button>
+							}
+						</div>
+					</EditForm>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+@code {
+	[Parameter]
+	public AdminViewModel ViewModel { get; set; }
+
+	private Game EditingGame { get; set; } = new();
+	private bool IsEditMode = false;
+	private bool IsGameModalOpen = false;
+
+	private List<string> Pictures { get; set; } = new();
+	private const int MaxImageSizeInBytes = 200 * 1024;
+
+	protected override async Task OnInitializedAsync()
+	{
+		ViewModel.Games = await DB_Services.GetAllAsync<Game>();
+		LoadPictures();
+	}
+
+	private void OpenGameModal()
+	{
+		IsEditMode = false;
+		EditingGame = new Game();
+		IsGameModalOpen = true;
+	}
+
+	private void OpenEditModal(Game game)
+	{
+		IsEditMode = true;
+		EditingGame = new Game
+			{
+				_id = game._id,
+				Name = game.Name,
+				Description = game.Description,
+				Link = game.Link,
+				TitleImageUrl = game.TitleImageUrl
+			};
+		IsGameModalOpen = true;
+	}
+
+	private void CloseGameModal()
+	{
+		IsGameModalOpen = false;
+		EditingGame = new Game();
+	}
+
+	private async Task HandleSubmit()
+	{
+		if (string.IsNullOrWhiteSpace(EditingGame.Name))
+			return;
+
+		if (!IsEditMode)
+			EditingGame._id = ObjectId.GenerateNewId();
+
+		DB_Services.Save(EditingGame);
+		ViewModel.Games = await DB_Services.GetAllAsync<Game>();
+		CloseGameModal();
+	}
+
+	private void SelectPicture(string pic)
+	{
+		EditingGame.TitleImageUrl = pic;
+	}
+
+	private async Task HandleImageSelected(InputFileChangeEventArgs e)
+	{
+		var file = e.File;
+		if (file.Size > MaxImageSizeInBytes)
+		{
+			return;
+		}
+		if (Path.GetExtension(file.Name).ToLower() != ".jpg")
+		{
+			return;
+		}
+		var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.Name);
+		var uploadPath = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "Games");
+		Directory.CreateDirectory(uploadPath);
+		var filePath = Path.Combine(uploadPath, uniqueFileName);
+		using (var fileStream = new FileStream(filePath, FileMode.Create))
+		{
+			await file.OpenReadStream().CopyToAsync(fileStream);
+		}
+		EditingGame.TitleImageUrl = uniqueFileName;
+		StateHasChanged();
+	}
+
+	private void DeletePicture()
+	{
+
+
+		try
+		{
+			if (!string.IsNullOrEmpty(EditingGame.TitleImageUrl))
+			{
+				var relativePath = EditingGame.TitleImageUrl.TrimStart('/');
+				var fullPath = Path.Combine(WebHostEnvironment.ContentRootPath, relativePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
+				fullPath = Path.Combine(fullPath, "Protected", "Events");
+
+				if (System.IO.File.Exists(fullPath))
+				{
+					System.IO.File.Delete(fullPath);
+				}
+				EditingGame.TitleImageUrl = "";
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error deleting picture: {ex.Message}");
+		}
+	}
+
+	private async void DeleteGame()
+	{
+		try
+		{
+			DB_Services.Delete<Game>(EditingGame._id);
+			ViewModel.Games = await DB_Services.GetAllAsync<Game>();
+			IsGameModalOpen = false;
+			StateHasChanged();
+
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error deleting game: {ex.Message}");
+		}
+	}
+
+	private void LoadPictures()
+	{
+		var imagesPath = Path.Combine(WebHostEnvironment.ContentRootPath, "Protected", "Games");
+		if (Directory.Exists(imagesPath))
+		{
+			var files = Directory.GetFiles(imagesPath)
+				.Select(f => Path.GetFileName(f))
+				.Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+				.ToList();
+
+			Pictures = files;
+		}
+		else
+		{
+			Pictures = new List<string>();
+		}
+	}
+}

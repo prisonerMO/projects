@@ -1,0 +1,451 @@
+﻿@using SQLChecker.Models
+@using SQLChecker.Models.Services
+@using SQLChecker.ViewModels
+@using MongoDB.Bson
+@using MongoDB.Bson.Serialization.Attributes
+@using Microsoft.AspNetCore.Components.Web
+@using SQLChecker.Services
+@inject ITaskService TaskService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>SQLChecker - Tehtävät</PageTitle>
+<div class="panel-header-container">
+    <div class="panel-headers">
+        <h3>Tehtävien hallinta</h3>
+    </div>
+</div>
+
+<div class="panel-create-container">
+    <button class="btn-create" @onclick="OpenCreateModal">+ Luo uusi tehtävä</button>
+</div>
+
+@if (ViewModel.Tasks == null || !ViewModel.Tasks.Any())
+{
+    <p class="nav-text-normal no-content">Ladataan tehtäviä...</p>
+}
+else
+{
+    <div class="admin-table-container">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Tehtävän nimi</th>
+                    <th>Kuvaus</th>
+                    <th>Oletettu SQL</th>
+                    <th>Tarkistukset</th>
+                    <th>Toiminnot</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var task in ViewModel.Tasks)
+                {
+                    <tr>
+                        <td class="admin-name-cell" @onclick="@(() => ShowTaskData(task))">
+                            @task.Name    
+                        </td>
+                        <td class="admin-description-cell">@task.Description</td>
+                        <td class="admin-expected-sql-cell">@task.ExpectedSql</td>
+                        <td class="admin-tasks-cell">
+                            <span class="assignment-badge">
+                                @(task.Checks?.Count ?? 0) tarkistusta
+                            </span>
+                        </td>
+                        <td class="admin-actions-cell">
+                            <button class="btn-action btn-view" @onclick="@(() => ShowTaskData(task))">
+                                NÄYTÄ
+                            </button>
+
+                            <button class="btn-action btn-edit" @onclick="@(() => OpenEditModal(task))">
+                                MUOKKAA
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal for viewing course details -->
+<div class="modal fade @(ShowTask ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tehtäväpaketin tiedot: @(SelectedTask?.Name ?? "")</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+            </div>
+            @if (SelectedTask != null)
+            {
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="course-name">Tehtävän nimi</label>
+                        <input id="course-name" class="form-control" value="@(SelectedTask?.Name)" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label for="course-assignments">Tarkistukset (@(SelectedTask?.Checks?.Count ?? 0))</label>
+                        @if (SelectedTask?.Checks != null && SelectedTask.Checks.Any())
+                        {
+                            <div class="assignments-list">
+                                @foreach (var check in SelectedTask.Checks)
+                                {
+                                    <div class="assignment-item">
+                                        @check
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Ei tehtäviä</p>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="event-btn-cancel" @onclick="CloseModal">Sulje</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for creating task-->
+<div class="modal fade @(IsCreateModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Luo uusi tehtävä</h5>
+                <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="NewTask" OnValidSubmit="CreateTask">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(CreateTaskError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @CreateTaskError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="new-assignment-name">Tehtävän nimi</label>
+                        <InputText id="new-assignment-name" class="form-control" @bind-Value="NewTask.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-assignment-description">Tehtävän kuvaus</label>
+                        <InputTextArea id="new-assignment-description" class="form-control" @bind-Value="NewTask.Description" />
+                    </div>
+                    <div class="mb-3 check-builder">
+                        <label>Tarkistukset (@NewTask.Checks.Count)</label>
+
+                        <!-- Existing checks list -->
+                        @if (NewTask.Checks.Any())
+                        {
+                            <div class="check-list mb-2">
+                                @foreach (var check in NewTask.Checks.Select((c, i) => (c, i)))
+                                {
+                                    <div class="assignment-item d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <strong>@check.c.Type</strong>
+                                            @if (!string.IsNullOrEmpty(check.c.Value))
+                                            {
+                                                <span class="text-muted ms-2">→ @check.c.Value</span>
+                                            }
+                                        </span>
+                                        <button type="button" class="btn-close btn-sm"
+                                                @onclick="@(() => RemoveCheck(NewTask.Checks, check.i))">
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        <div class="check-builder-panel">
+                            <div class="check-list mb-2">
+                                <select class="form-select" @bind="NewCheckType">
+                                    <option value="Contains">Contains</option>
+                                    <option value="NotContains">NotContains</option>
+                                    <option value="CompareResult">CompareResult</option>
+                                    <option value="RowCount">RowCount</option>
+                                    <option value="FieldCount">FieldCount</option>
+                                    <option value="ColumnExists">ColumnExists</option>
+                                    <option value="StartsWithSelect">StartsWithSelect</option>
+                                    <option value="NoDuplicates">NoDuplicates</option>
+                                    <option value="HasWhereClause">HasWhereClause</option>
+                                    <option value="HasOrderBy">HasOrderBy</option>
+                                    <option value="HasGroupBy">HasGroupBy</option>
+                                    <option value="HasJoin">HasJoin</option>
+                                    <option value="Limit">Limit</option>
+                                    <option value="Custom">Custom</option>
+                                </select>
+
+                                @if (CheckTypeNeedsValue(NewCheckType))
+                                {
+                                    <input class="check-input" placeholder="Arvo..."
+                                           @bind="NewCheckValue" @bind:event="oninput" />
+                                }
+
+                                <button type="button" class="event-btn-create"
+                                        @onclick="@(() => AddCheck(NewTask.Checks))">
+                                    + Lisää
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseCreateModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Lisää</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for editing course -->
+<div class="modal fade @(IsEditModalOpen ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Muokkaa tehtävää</h5>
+                <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="EditingTask" OnValidSubmit="UpdateTask">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+        
+                    @if (!string.IsNullOrEmpty(EditTaskError))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @EditTaskError
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="edit-course-name">Tehtävän nimi</label>
+                        <InputText id="edit-course-name" class="form-control" @bind-Value="EditingTask.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-course-name">Tehtävän kuvaus</label>
+                        <InputTextArea id="edit-course-name" class="form-control" @bind-Value="EditingTask.Description" />
+                    </div>
+                    <div class="mb-3 check-builder">
+                        <label>Tarkistukset (@NewTask.Checks.Count)</label>
+
+                        <!-- Existing checks list -->
+                        @if (NewTask.Checks.Any())
+                        {
+                            <div class="check-list mb-2">
+                                @foreach (var check in NewTask.Checks.Select((c, i) => (c, i)))
+                                {
+                                    <div class="assignment-item d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <strong>@check.c.Type</strong>
+                                            @if (!string.IsNullOrEmpty(check.c.Value))
+                                            {
+                                                <span class="text-muted ms-2">→ @check.c.Value</span>
+                                            }
+                                        </span>
+                                        <button type="button" class="btn-close btn-sm"
+                                                @onclick="@(() => RemoveCheck(NewTask.Checks, check.i))">
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        <div class="check-builder-panel">
+                        <div class="check-list mb-2">
+                            <select class="form-select" @bind="NewCheckType">
+                                <option value="Contains">Contains</option>
+                                <option value="NotContains">NotContains</option>
+                                <option value="CompareResult">CompareResult</option>
+                                <option value="RowCount">RowCount</option>
+                                <option value="FieldCount">FieldCount</option>
+                                <option value="ColumnExists">ColumnExists</option>
+                                <option value="StartsWithSelect">StartsWithSelect</option>
+                                <option value="NoDuplicates">NoDuplicates</option>
+                                <option value="HasWhereClause">HasWhereClause</option>
+                                <option value="HasOrderBy">HasOrderBy</option>
+                                <option value="HasGroupBy">HasGroupBy</option>
+                                <option value="HasJoin">HasJoin</option>
+                                <option value="Limit">Limit</option>
+                                <option value="Custom">Custom</option>
+                            </select>
+
+                            @if (CheckTypeNeedsValue(NewCheckType))
+                            {
+                                <input class="check-input" placeholder="Arvo..."
+                                       @bind="NewCheckValue" @bind:event="oninput" />
+                            }
+
+                            <button type="button" class="event-btn-create"
+                                    @onclick="@(() => AddCheck(NewTask.Checks))">
+                                + Lisää
+                            </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="event-btn-cancel" @onclick="CloseEditModal">Peruuta</button>
+                        <button type="submit" class="event-btn-create">Tallenna</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public AdminViewModel ViewModel { get; set; }
+
+    private bool ShowTask { get; set; } = false;
+    private TaskDefinition? SelectedTask { get; set; } = null;
+
+    private string? CreateTaskError { get; set; } = null;
+    private bool IsCreateModalOpen = false;
+    private TaskDefinition NewTask { get; set; } = new();
+
+    private string? EditTaskError { get; set; } = null;
+    private bool IsEditModalOpen = false;
+    private TaskDefinition EditingTask { get; set; } = new();
+
+    private string NewCheckType { get; set; } = "Contains";
+    private string NewCheckValue { get; set; } = "";
+
+
+
+    private void ShowTaskData(TaskDefinition task)
+    {
+        Console.WriteLine($"Showing task data for: {task.Description}");
+        SelectedTask = task;
+        ShowTask = true;
+    }
+
+    private void CloseModal()
+    {
+        ShowTask = false;
+        SelectedTask = null;
+    }
+
+    private void OpenCreateModal()
+    {
+        IsCreateModalOpen = true;
+        NewTask = new TaskDefinition();
+        NewCheckType = "Contains";
+        NewCheckValue = ""; 
+    }
+
+    private void CloseCreateModal()
+    {
+        IsCreateModalOpen = false;
+        CreateTaskError = null;
+        NewTask = new TaskDefinition();
+    }
+
+    private void OpenEditModal(TaskDefinition task)
+    {
+        EditingTask = new TaskDefinition
+        {
+            TaskId = task.TaskId,
+            Name = task.Name,
+            Description = task.Description,
+            ExpectedSql = task.ExpectedSql,
+            Hint = task.Hint,
+            Checks = task.Checks?.Select(c => new Check
+            {
+                Type = c.Type,
+                Value = c.Value
+            }).ToList() ?? new()       // copy checks so edits don't mutate the original
+        };
+        NewCheckType = "Contains";   // add this
+        NewCheckValue = "";           // add this
+        IsEditModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        IsEditModalOpen = false;
+        EditTaskError = null;
+        EditingTask = new TaskDefinition();
+    }
+
+    private async Task CreateTask()
+    {
+        CreateTaskError = null;
+
+        if (string.IsNullOrWhiteSpace(NewTask.Description))
+        {
+            CreateTaskError = "Tehtävän kuvaus on pakollinen.";
+            return;
+        }
+
+        try
+        {
+            var createdTask = await TaskService.CreateTaskAsync(NewTask);
+            ViewModel.Tasks = await TaskService.GetAllTasksAsync();
+
+            NewTask = new TaskDefinition();
+            CloseCreateModal();
+        }
+        catch (Exception ex)
+        {
+            CreateTaskError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task UpdateTask()
+    {
+        EditTaskError = null;
+
+        if (string.IsNullOrWhiteSpace(EditingTask.Description))
+        {
+            EditTaskError = "Tehtävän kuvaus on pakollinen.";
+            return;
+        }
+
+        try
+        {
+            await TaskService.UpdateTaskAsync(EditingTask);
+            ViewModel.Tasks = await TaskService.GetAllTasksAsync();
+            CloseEditModal();
+        }
+        catch (Exception ex)
+        {
+            EditTaskError = ex.Message;
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+
+    private bool CheckTypeNeedsValue(string type) => type switch
+    {
+        "Contains" => true,
+        "NotContains" => true,
+        "RowCount" => true,
+        "FieldCount" => true,
+        "ColumnExists" => true,
+        "Limit" => true,
+        "Custom" => true,
+        _ => false   // CompareResult, StartsWithSelect, HasWhereClause, etc.
+    };
+    private void AddCheck(List<Check> checks)
+    {
+        if (CheckTypeNeedsValue(NewCheckType) && string.IsNullOrWhiteSpace(NewCheckValue))
+            return; // don't add empty value checks
+
+        checks.Add(new Check
+        {
+            Type = NewCheckType,
+            Value = NewCheckValue.Trim()
+        });
+
+        NewCheckValue = ""; // reset value, keep type selected
+    }
+
+    private void RemoveCheck(List<Check> checks, int index)
+    {
+        checks.RemoveAt(index);
+    }
+}
